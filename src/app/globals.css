@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/* Horizontally-scrollable rows (e.g. the admin nav) without a visible scrollbar */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 :root {
   --background: #f8fafc;
   --foreground: #0f172a;

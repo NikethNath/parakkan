@@ -32,7 +32,8 @@ export default function AttendanceDay({ date, rows }: { date: string; rows: Row[
   }
 
   return (
-    <table className="w-full text-sm">
+    <div className="overflow-x-auto">
+    <table className="w-full min-w-[20rem] text-sm">
       <thead className="text-left text-slate-500">
         <tr>
           <th className="px-2 py-1.5 font-medium">Employee</th>
@@ -62,6 +63,7 @@ export default function AttendanceDay({ date, rows }: { date: string; rows: Row[
         ))}
       </tbody>
     </table>
+    </div>
   );
 }
 
