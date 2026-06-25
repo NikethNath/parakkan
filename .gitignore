@@ -35,6 +35,9 @@ npm-debug.log*
 # prisma local db data (if using a local volume)
 /prisma/data
 
+# database backups (created on the server)
+/backups
+
 # editor
 .vscode/*
 !.vscode/extensions.json

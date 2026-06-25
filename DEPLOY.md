@@ -97,23 +97,51 @@ ufw allow 22 && ufw allow 80 && ufw allow 443 && ufw enable
 ```
 (Postgres is **not** exposed to the internet — only the app talks to it inside Docker.)
 
-## Backups (do this!)
-Daily database dump to a file:
+## Backups — hourly (recommended)
+A backup script is included (`scripts/backup.sh`): it dumps the DB, gzips it, and keeps
+the last 14 days in `~/parakkan/backups`. Schedule it hourly with cron:
 ```bash
-docker compose -f docker-compose.prod.yml exec -T db \
-  pg_dump -U hpcl hpcl > backup-$(date +%F).sql
+crontab -e
+# add this line:
+0 * * * * /root/parakkan/scripts/backup.sh >> /root/parakkan/backups/backup.log 2>&1
 ```
-Put that in a cron job and copy the file off-server (or to object storage). To restore:
+Run it once by hand to confirm: `~/parakkan/scripts/backup.sh`
+
+**These live on the same droplet** — also copy them off-site (to your laptop or DO Spaces),
+e.g. from your laptop: `scp root@SERVER_IP:'~/parakkan/backups/*.gz' ./`
+
+Restore a backup:
 ```bash
-cat backup-YYYY-MM-DD.sql | docker compose -f docker-compose.prod.yml exec -T db psql -U hpcl hpcl
+gunzip -c backups/hpcl-YYYYMMDD-HHMM.sql.gz | \
+  docker compose -f docker-compose.prod.yml exec -T db psql -U hpcl hpcl
 ```
 
 ## Updating to a new version
+Either push to GitHub (auto-deploys, see below) or, manually on the server:
 ```bash
 git pull
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 Migrations run automatically; your data is preserved in the `pgdata` volume.
+
+## Auto-deploy on `git push` (GitHub Actions)
+`.github/workflows/deploy.yml` SSHes into the droplet and rebuilds on every push to `main`.
+One-time setup:
+1. **Let the droplet pull a private repo unattended:**
+   ```bash
+   cd ~/parakkan && git config credential.helper store && git pull
+   ```
+   (enter your GitHub username + Personal Access Token once; it's cached after.)
+2. **Make an SSH key for CI** (on your laptop):
+   ```bash
+   ssh-keygen -t ed25519 -f deploykey -N ""
+   ssh-copy-id -i deploykey.pub root@SERVER_IP     # adds the public key to the droplet
+   ```
+3. **Add 3 GitHub repo secrets** (repo → Settings → Secrets and variables → Actions):
+   - `DEPLOY_HOST` = your droplet IP
+   - `DEPLOY_USER` = `root`
+   - `DEPLOY_SSH_KEY` = the contents of the private `deploykey` file
+4. Push to `main` → the **Actions** tab shows the deploy running.
 
 ---
 
