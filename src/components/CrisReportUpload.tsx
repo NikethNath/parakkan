@@ -34,11 +34,11 @@ export default function CrisReportUpload() {
   }
 
   return (
-    <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
+    <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
+      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted">
         Upload CRIS Daily Sales Report
       </h2>
-      <p className="mb-3 text-xs text-slate-500">
+      <p className="mb-3 text-xs text-muted">
         Download the Daily Sales Report (.xlsx) from CRIS for a date range and upload
         it here. The <strong>Net Totalizer Sales</strong> per product/date is matched
         against what staff entered.
@@ -53,13 +53,13 @@ export default function CrisReportUpload() {
         <button
           onClick={upload}
           disabled={!file || busy}
-          className="rounded-lg bg-sky-600 px-4 py-1.5 font-medium text-white hover:bg-sky-700 disabled:opacity-60"
+          className="rounded-lg bg-accent px-4 py-1.5 font-medium text-white hover:bg-accent-strong disabled:opacity-60"
         >
           {busy ? "Importing…" : "Upload"}
         </button>
       </div>
-      {msg && <p className="mt-2 text-sm text-emerald-700">{msg}</p>}
-      {err && <p className="mt-2 text-sm text-red-600">{err}</p>}
+      {msg && <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-300">{msg}</p>}
+      {err && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{err}</p>}
     </section>
   );
 }

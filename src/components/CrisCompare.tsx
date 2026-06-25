@@ -13,11 +13,11 @@ export default function CrisCompare({ ms, hsd }: { ms: Row[]; hsd: Row[] }) {
   return (
     <div>
       <label className="mb-3 inline-flex items-center gap-2 text-sm">
-        <span className="font-medium text-slate-700">Product</span>
+        <span className="font-medium text-foreground">Product</span>
         <select
           value={product}
           onChange={(e) => setProduct(e.target.value as "MS" | "HSD")}
-          className="rounded-lg border border-slate-300 px-3 py-1.5"
+          className="rounded-lg border border-border px-3 py-1.5"
         >
           <option value="MS">MS (Petrol)</option>
           <option value="HSD">HSD (Diesel)</option>
@@ -25,11 +25,11 @@ export default function CrisCompare({ ms, hsd }: { ms: Row[]; hsd: Row[] }) {
       </label>
 
       {rows.length === 0 ? (
-        <p className="py-6 text-center text-sm text-slate-400">No data for this product.</p>
+        <p className="py-6 text-center text-sm text-faint">No data for this product.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="text-left text-slate-500">
+            <thead className="text-left text-muted">
               <tr>
                 <th className="px-3 py-1.5 font-medium">Date</th>
                 <th className="px-3 py-1.5 text-right font-medium">CRIS net totalizer</th>
@@ -43,7 +43,7 @@ export default function CrisCompare({ ms, hsd }: { ms: Row[]; hsd: Row[] }) {
                 const d = has ? Math.round((r.staff - (r.cris ?? 0)) * 100) / 100 : null;
                 const off = d !== null && Math.abs(d) > TOL;
                 return (
-                  <tr key={r.date} className={"border-t border-slate-100 " + (off ? "bg-red-50" : "")}>
+                  <tr key={r.date} className={"border-t border-border " + (off ? "bg-red-50 dark:bg-red-500/10" : "")}>
                     <td className="px-3 py-1.5">
                       {new Date(`${r.date}T00:00:00Z`).toLocaleDateString("en-IN", {
                         day: "2-digit",
@@ -51,14 +51,14 @@ export default function CrisCompare({ ms, hsd }: { ms: Row[]; hsd: Row[] }) {
                         timeZone: "UTC",
                       })}
                     </td>
-                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">
+                    <td className="px-3 py-1.5 text-right tabular-nums text-muted">
                       {has ? fmtL(r.cris as number) : "—"}
                     </td>
-                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{fmtL(r.staff)}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-muted">{fmtL(r.staff)}</td>
                     <td
                       className={
                         "px-3 py-1.5 text-right font-medium tabular-nums " +
-                        (d === null ? "text-slate-300" : off ? "text-red-600" : "text-emerald-600")
+                        (d === null ? "text-faint" : off ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400")
                       }
                     >
                       {d === null ? "—" : off ? `${d > 0 ? "+" : "−"}${fmtL(Math.abs(d))}` : "✓"}

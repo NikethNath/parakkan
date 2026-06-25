@@ -76,39 +76,39 @@ export default async function AttendancePage({
 
   return (
     <>
-      <form className="flex flex-wrap items-end gap-3 rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+      <form className="flex flex-wrap items-end gap-3 rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
         <label className="text-sm">
-          <span className="mb-1 block font-medium text-slate-700">Month</span>
+          <span className="mb-1 block font-medium text-foreground">Month</span>
           <input
             type="month"
             name="month"
             defaultValue={month}
-            className="rounded-lg border border-slate-300 px-3 py-1.5"
+            className="rounded-lg border border-border px-3 py-1.5"
           />
         </label>
         <label className="text-sm">
-          <span className="mb-1 block font-medium text-slate-700">Day</span>
+          <span className="mb-1 block font-medium text-foreground">Day</span>
           <input
             type="date"
             name="date"
             defaultValue={date}
-            className="rounded-lg border border-slate-300 px-3 py-1.5"
+            className="rounded-lg border border-border px-3 py-1.5"
           />
         </label>
         <button
           type="submit"
-          className="rounded-lg bg-sky-600 px-4 py-1.5 font-medium text-white hover:bg-sky-700"
+          className="rounded-lg bg-accent px-4 py-1.5 font-medium text-white hover:bg-accent-strong"
         >
           Apply
         </button>
       </form>
 
-      <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+      <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">
           Days present — {monthLabel}
         </h2>
         <table className="w-full text-sm">
-          <thead className="text-left text-slate-500">
+          <thead className="text-left text-muted">
             <tr>
               <th className="px-2 py-1.5 font-medium">Employee</th>
               <th className="px-2 py-1.5 text-right font-medium">Days present</th>
@@ -119,12 +119,12 @@ export default async function AttendancePage({
             {employees.map((e) => {
               const s = summary.get(e.id);
               return (
-                <tr key={e.id} className="border-t border-slate-100">
-                  <td className="px-2 py-1.5 font-medium text-slate-700">{e.name}</td>
+                <tr key={e.id} className="border-t border-border">
+                  <td className="px-2 py-1.5 font-medium text-foreground">{e.name}</td>
                   <td className="px-2 py-1.5 text-right tabular-nums">
                     {s ? s.days.size : 0}
                   </td>
-                  <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">
+                  <td className="px-2 py-1.5 text-right tabular-nums text-muted">
                     {s ? s.shifts : 0}
                   </td>
                 </tr>
@@ -134,11 +134,11 @@ export default async function AttendancePage({
         </table>
       </section>
 
-      <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-        <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-slate-500">
+      <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
+        <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-muted">
           Attendance — {dayLabel}
         </h2>
-        <p className="mb-3 text-xs text-slate-500">
+        <p className="mb-3 text-xs text-muted">
           Set each person&apos;s status for this day (pick another day above). Changes save
           instantly and feed the month totals + salary.
         </p>

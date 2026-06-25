@@ -44,11 +44,11 @@ export default function CrisCredentialsForm({
   }
 
   return (
-    <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-      <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-slate-500">
+    <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
+      <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-muted">
         CRIS login
       </h2>
-      <p className="mb-3 text-xs text-slate-500">
+      <p className="mb-3 text-xs text-muted">
         {configured
           ? `Saved (encrypted)${updatedLabel ? ` · updated ${updatedLabel}` : ""}. Re-enter to update.`
           : "Not set yet. Stored AES-256 encrypted — never in plain text."}
@@ -59,26 +59,26 @@ export default function CrisCredentialsForm({
           value={username}
           autoCapitalize="none"
           onChange={(e) => setUsername(e.target.value)}
-          className="rounded-lg border border-slate-300 px-3 py-2"
+          className="rounded-lg border border-border px-3 py-2"
         />
         <input
           placeholder="CRIS password"
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="rounded-lg border border-slate-300 px-3 py-2"
+          className="rounded-lg border border-border px-3 py-2"
         />
         <div>
           <button
             onClick={save}
             disabled={busy || !username || !password}
-            className="rounded-lg bg-sky-600 px-4 py-2 font-semibold text-white hover:bg-sky-700 disabled:opacity-60"
+            className="rounded-lg bg-accent px-4 py-2 font-semibold text-white hover:bg-accent-strong disabled:opacity-60"
           >
             {busy ? "Saving…" : "Save credentials"}
           </button>
         </div>
-        {msg && <p className="text-sm text-emerald-700">{msg}</p>}
-        {err && <p className="text-sm text-red-600">{err}</p>}
+        {msg && <p className="text-sm text-emerald-700 dark:text-emerald-300">{msg}</p>}
+        {err && <p className="text-sm text-red-600 dark:text-red-400">{err}</p>}
       </div>
     </section>
   );

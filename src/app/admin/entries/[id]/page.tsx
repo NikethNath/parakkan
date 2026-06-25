@@ -72,17 +72,17 @@ export default async function AdminEntryDetail({
 
   return (
     <div className="pb-4">
-      <Link href="/admin" className="text-sm text-sky-600 hover:underline">
+      <Link href="/admin" className="text-sm text-accent hover:underline">
         ← Back to dashboard
       </Link>
 
-      <div className="mt-2 rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+      <div className="mt-2 rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h1 className="text-lg font-bold text-slate-800">
+            <h1 className="text-lg font-bold text-foreground">
               {entry.employee.name}
             </h1>
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-muted">
               {entry.businessDate.toLocaleDateString("en-IN", {
                 day: "2-digit",
                 month: "short",
@@ -95,8 +95,8 @@ export default async function AdminEntryDetail({
             className={
               "rounded-full px-3 py-1 text-xs font-semibold " +
               (entry.status === "VERIFIED"
-                ? "bg-emerald-50 text-emerald-700"
-                : "bg-amber-50 text-amber-700")
+                ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                : "bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300")
             }
           >
             {entry.status === "VERIFIED"
@@ -107,18 +107,18 @@ export default async function AdminEntryDetail({
       </div>
 
       {entry.audits.length > 0 && (
-        <div className="mt-3 rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
+        <div className="mt-3 rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted">
             Edit history ({entry.audits.length})
           </h2>
           <ul className="max-h-48 space-y-1 overflow-y-auto text-sm">
             {entry.audits.map((a) => (
-              <li key={a.id} className="flex justify-between gap-2 text-slate-600">
+              <li key={a.id} className="flex justify-between gap-2 text-muted">
                 <span>
-                  <span className="font-medium text-slate-700">{a.field}</span>:{" "}
+                  <span className="font-medium text-foreground">{a.field}</span>:{" "}
                   {a.oldValue} → {a.newValue}
                 </span>
-                <span className="whitespace-nowrap text-xs text-slate-400">
+                <span className="whitespace-nowrap text-xs text-faint">
                   {a.changedBy.name} ·{" "}
                   {a.changedAt.toLocaleDateString("en-IN", {
                     day: "2-digit",
@@ -131,7 +131,7 @@ export default async function AdminEntryDetail({
         </div>
       )}
 
-      <p className="mt-3 px-1 text-xs text-slate-500">
+      <p className="mt-3 px-1 text-xs text-muted">
         Editing recomputes all totals and records each change below. Current
         short/excess: {inr(toNum(entry.shortExcess))}
       </p>

@@ -55,33 +55,33 @@ export default function CrisFetchForm({
   }
 
   return (
-    <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
+    <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
+      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted">
         Fetch from CRIS (auto)
       </h2>
-      <p className="mb-3 text-xs text-slate-500">
+      <p className="mb-3 text-xs text-muted">
         Logs into CRIS, downloads the Daily Sales Report for the range, and imports it.
         Run this when you&apos;re <strong>not</strong> logged into CRIS yourself
         (single-session). It logs out automatically when done.
       </p>
-      {hint && <p className="mb-3 text-xs text-sky-600">{hint}</p>}
+      {hint && <p className="mb-3 text-xs text-accent">{hint}</p>}
       <div className="flex flex-wrap items-end gap-3">
         <label className="text-sm">
-          <span className="mb-1 block font-medium text-slate-700">From</span>
+          <span className="mb-1 block font-medium text-foreground">From</span>
           <input
             type="date"
             value={from}
             onChange={(e) => setFrom(e.target.value)}
-            className="rounded-lg border border-slate-300 px-3 py-1.5"
+            className="rounded-lg border border-border px-3 py-1.5"
           />
         </label>
         <label className="text-sm">
-          <span className="mb-1 block font-medium text-slate-700">To</span>
+          <span className="mb-1 block font-medium text-foreground">To</span>
           <input
             type="date"
             value={to}
             onChange={(e) => setTo(e.target.value)}
-            className="rounded-lg border border-slate-300 px-3 py-1.5"
+            className="rounded-lg border border-border px-3 py-1.5"
           />
         </label>
         <button
@@ -93,10 +93,10 @@ export default function CrisFetchForm({
         </button>
       </div>
       {!configured && (
-        <p className="mt-2 text-xs text-amber-600">Save your CRIS login above first.</p>
+        <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">Save your CRIS login above first.</p>
       )}
-      {msg && <p className="mt-2 text-sm text-emerald-700">{msg}</p>}
-      {err && <p className="mt-2 text-sm text-red-600">{err}</p>}
+      {msg && <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-300">{msg}</p>}
+      {err && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{err}</p>}
     </section>
   );
 }

@@ -238,7 +238,7 @@ export default function DailyEntryForm({
             />
           </Field>
         </div>
-        <div className="mt-3 grid grid-cols-3 gap-2 rounded-lg bg-slate-50 p-3 text-center text-sm">
+        <div className="mt-3 grid grid-cols-3 gap-2 rounded-lg bg-surface-2 p-3 text-center text-sm">
           <Stat label="Dispensed" value={litres(computed.grossLitres)} />
           <Stat label="Salable" value={litres(computed.netSalableLitres)} />
           <Stat label="Fuel expected" value={inr(computed.fuelExpected)} strong />
@@ -247,9 +247,9 @@ export default function DailyEntryForm({
 
       {/* Cash denominations */}
       <Section title="Cash counted">
-        <div className="overflow-hidden rounded-lg border border-slate-200">
+        <div className="overflow-hidden rounded-lg border border-border">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-slate-500">
+            <thead className="bg-surface-2 text-muted">
               <tr>
                 <th className="px-3 py-1.5 text-left font-medium">Note</th>
                 <th className="px-3 py-1.5 text-left font-medium">Qty</th>
@@ -261,8 +261,8 @@ export default function DailyEntryForm({
                 const key = denomKey(d);
                 const qty = n(form[key]);
                 return (
-                  <tr key={d} className="border-t border-slate-100">
-                    <td className="px-3 py-1 font-medium text-slate-700">₹{d}</td>
+                  <tr key={d} className="border-t border-border">
+                    <td className="px-3 py-1 font-medium text-foreground">₹{d}</td>
                     <td className="px-3 py-1">
                       <input
                         type="number"
@@ -270,18 +270,18 @@ export default function DailyEntryForm({
                         min={0}
                         value={form[key]}
                         onChange={(e) => set(key, e.target.value)}
-                        className="w-24 rounded border border-slate-300 px-2 py-1"
+                        className="w-24 rounded border border-border px-2 py-1"
                         placeholder="0"
                       />
                     </td>
-                    <td className="px-3 py-1 text-right tabular-nums text-slate-600">
+                    <td className="px-3 py-1 text-right tabular-nums text-muted">
                       {inr(d * qty)}
                     </td>
                   </tr>
                 );
               })}
-              <tr className="border-t border-slate-100">
-                <td className="px-3 py-1 font-medium text-slate-700">Coins</td>
+              <tr className="border-t border-border">
+                <td className="px-3 py-1 font-medium text-foreground">Coins</td>
                 <td className="px-3 py-1" colSpan={1}>
                   <input
                     type="number"
@@ -290,15 +290,15 @@ export default function DailyEntryForm({
                     step="0.01"
                     value={form.coins}
                     onChange={(e) => set("coins", e.target.value)}
-                    className="w-24 rounded border border-slate-300 px-2 py-1"
+                    className="w-24 rounded border border-border px-2 py-1"
                     placeholder="0"
                   />
                 </td>
-                <td className="px-3 py-1 text-right tabular-nums text-slate-600">
+                <td className="px-3 py-1 text-right tabular-nums text-muted">
                   {inr(n(form.coins))}
                 </td>
               </tr>
-              <tr className="border-t border-slate-200 bg-slate-50 font-semibold">
+              <tr className="border-t border-border bg-surface-2 font-semibold">
                 <td className="px-3 py-2" colSpan={2}>
                   Cash total
                 </td>
@@ -377,7 +377,7 @@ export default function DailyEntryForm({
               }
               className={lineInput}
             />
-            <span className="self-center text-right text-sm tabular-nums text-slate-600">
+            <span className="self-center text-right text-sm tabular-nums text-muted">
               {inr(n(row.qty) * n(row.unitPrice))}
             </span>
           </>
@@ -412,7 +412,7 @@ export default function DailyEntryForm({
               }
               className={lineInput}
             />
-            <span className="self-center text-right text-sm tabular-nums text-slate-600">
+            <span className="self-center text-right text-sm tabular-nums text-muted">
               {inr(n(row.amount))}
             </span>
           </>
@@ -447,7 +447,7 @@ export default function DailyEntryForm({
               }
               className={lineInput}
             />
-            <span className="self-center text-right text-sm tabular-nums text-slate-600">
+            <span className="self-center text-right text-sm tabular-nums text-muted">
               {inr(n(row.amount))}
             </span>
           </>
@@ -455,7 +455,7 @@ export default function DailyEntryForm({
       />
 
       {error && (
-        <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+        <div className="rounded-lg bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300">
           <p className="font-medium">{error}</p>
           {issues.length > 0 && (
             <ul className="mt-1 list-inside list-disc">
@@ -468,20 +468,20 @@ export default function DailyEntryForm({
       )}
 
       {/* Sticky summary + submit */}
-      <div className="fixed inset-x-0 bottom-0 z-10 border-t border-slate-200 bg-white/95 p-3 backdrop-blur">
+      <div className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-surface/95 p-3 backdrop-blur">
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-3">
           <div className="text-sm">
-            <p className="text-slate-500">
+            <p className="text-muted">
               Collected {inr(computed.collected)} · Expected {inr(computed.fuelExpected)}
             </p>
             <p
               className={
                 "text-lg font-bold " +
                 (label === "SHORT"
-                  ? "text-red-600"
+                  ? "text-red-600 dark:text-red-400"
                   : label === "EXCESS"
-                    ? "text-emerald-600"
-                    : "text-slate-700")
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-foreground")
               }
             >
               {label === "BALANCED"
@@ -491,7 +491,7 @@ export default function DailyEntryForm({
           </div>
           <div className="flex items-center gap-3">
             {admin && (
-              <label className="flex items-center gap-1.5 text-sm text-slate-600">
+              <label className="flex items-center gap-1.5 text-sm text-muted">
                 <input
                   type="checkbox"
                   checked={verified}
@@ -504,7 +504,7 @@ export default function DailyEntryForm({
             <button
               type="submit"
               disabled={saving}
-              className="rounded-lg bg-sky-600 px-5 py-2.5 font-semibold text-white transition hover:bg-sky-700 disabled:opacity-60"
+              className="rounded-lg bg-accent px-5 py-2.5 font-semibold text-white transition hover:bg-accent-strong disabled:opacity-60"
             >
               {saving
                 ? "Saving…"
@@ -522,13 +522,13 @@ export default function DailyEntryForm({
 // --- small presentational helpers -----------------------------------------
 
 const inputCls =
-  "w-full rounded-lg border border-slate-300 px-3 py-2 text-base outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-200";
-const lineInput = "rounded border border-slate-300 px-2 py-1 text-sm";
+  "w-full rounded-lg border border-border px-3 py-2 text-base outline-none focus:border-accent focus:ring-2 focus:ring-accent/30";
+const lineInput = "rounded border border-border px-2 py-1 text-sm";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+    <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
+      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">
         {title}
       </h2>
       {children}
@@ -539,7 +539,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-sm font-medium text-slate-700">{label}</span>
+      <span className="mb-1 block text-sm font-medium text-foreground">{label}</span>
       {children}
     </label>
   );
@@ -548,8 +548,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function Stat({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
     <div>
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className={strong ? "font-semibold text-slate-800" : "text-slate-700"}>{value}</p>
+      <p className="text-xs text-muted">{label}</p>
+      <p className={strong ? "font-semibold text-foreground" : "text-foreground"}>{value}</p>
     </div>
   );
 }
@@ -632,11 +632,11 @@ function LineSection<T>({
         <button
           type="button"
           onClick={onAdd}
-          className="rounded-md border border-slate-300 px-3 py-1 text-sm text-slate-700 hover:bg-slate-50"
+          className="rounded-md border border-border px-3 py-1 text-sm text-foreground hover:bg-surface-2"
         >
           {addLabel}
         </button>
-        <span className="text-sm font-medium text-slate-700">{inr(total)}</span>
+        <span className="text-sm font-medium text-foreground">{inr(total)}</span>
       </div>
     </Section>
   );

@@ -14,11 +14,11 @@ export default function BankReconcile({ gpay, pos }: { gpay: Row[]; pos: Row[] }
   return (
     <div>
       <label className="mb-3 inline-flex items-center gap-2 text-sm">
-        <span className="font-medium text-slate-700">Channel</span>
+        <span className="font-medium text-foreground">Channel</span>
         <select
           value={channel}
           onChange={(e) => setChannel(e.target.value as "GPAY" | "POS")}
-          className="rounded-lg border border-slate-300 px-3 py-1.5"
+          className="rounded-lg border border-border px-3 py-1.5"
         >
           <option value="GPAY">GPay / UPI</option>
           <option value="POS">POS / card</option>
@@ -26,11 +26,11 @@ export default function BankReconcile({ gpay, pos }: { gpay: Row[]; pos: Row[] }
       </label>
 
       {!hasAny ? (
-        <p className="py-6 text-center text-sm text-slate-400">Nothing to reconcile yet.</p>
+        <p className="py-6 text-center text-sm text-faint">Nothing to reconcile yet.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="text-left text-slate-500">
+            <thead className="text-left text-muted">
               <tr>
                 <th className="px-3 py-1.5 font-medium">Date</th>
                 <th className="px-3 py-1.5 text-right font-medium">Bank</th>
@@ -43,7 +43,7 @@ export default function BankReconcile({ gpay, pos }: { gpay: Row[]; pos: Row[] }
                 const d = Math.round((r.entered - r.bank) * 100) / 100;
                 const off = Math.abs(d) > TOL;
                 return (
-                  <tr key={r.date} className={"border-t border-slate-100 " + (off ? "bg-red-50" : "")}>
+                  <tr key={r.date} className={"border-t border-border " + (off ? "bg-red-50 dark:bg-red-500/10" : "")}>
                     <td className="px-3 py-1.5">
                       {new Date(`${r.date}T00:00:00Z`).toLocaleDateString("en-IN", {
                         day: "2-digit",
@@ -51,12 +51,12 @@ export default function BankReconcile({ gpay, pos }: { gpay: Row[]; pos: Row[] }
                         timeZone: "UTC",
                       })}
                     </td>
-                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{inr(r.bank)}</td>
-                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{inr(r.entered)}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-muted">{inr(r.bank)}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-muted">{inr(r.entered)}</td>
                     <td
                       className={
                         "px-3 py-1.5 text-right font-medium tabular-nums " +
-                        (off ? "text-red-600" : "text-slate-400")
+                        (off ? "text-red-600 dark:text-red-400" : "text-faint")
                       }
                     >
                       {off ? `${d > 0 ? "+" : "−"}${inr(Math.abs(d))}` : "✓"}

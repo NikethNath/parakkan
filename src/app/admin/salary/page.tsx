@@ -61,19 +61,19 @@ export default async function SalaryPage({
   return (
     <>
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <form className="flex items-end gap-3 rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200 print:hidden">
+        <form className="flex items-end gap-3 rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border print:hidden">
           <label className="text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Month</span>
+            <span className="mb-1 block font-medium text-foreground">Month</span>
             <input
               type="month"
               name="month"
               defaultValue={month}
-              className="rounded-lg border border-slate-300 px-3 py-1.5"
+              className="rounded-lg border border-border px-3 py-1.5"
             />
           </label>
           <button
             type="submit"
-            className="rounded-lg bg-sky-600 px-4 py-1.5 font-medium text-white hover:bg-sky-700"
+            className="rounded-lg bg-accent px-4 py-1.5 font-medium text-white hover:bg-accent-strong"
           >
             Apply
           </button>
@@ -81,17 +81,17 @@ export default async function SalaryPage({
         <PrintButton />
       </div>
 
-      <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-        <h2 className="mb-1 text-base font-bold text-slate-800">
+      <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
+        <h2 className="mb-1 text-base font-bold text-foreground">
           Salary — {monthLabel}
         </h2>
-        <p className="mb-3 text-xs text-slate-500">
+        <p className="mb-3 text-xs text-muted">
           Net = (shifts present × shift rate) + extra fixed pay + month&apos;s
           short/excess (shorts deducted, excess added).
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="text-left text-slate-500">
+            <thead className="text-left text-muted">
               <tr>
                 <th className="px-2 py-1.5 font-medium">Employee</th>
                 <th className="px-2 py-1.5 text-right font-medium">Shifts</th>
@@ -105,39 +105,39 @@ export default async function SalaryPage({
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-2 py-6 text-center text-slate-400">
+                  <td colSpan={6} className="px-2 py-6 text-center text-faint">
                     No activity this month.
                   </td>
                 </tr>
               ) : (
                 rows.map((r) => (
-                  <tr key={r.emp.id} className="border-t border-slate-100">
-                    <td className="px-2 py-1.5 font-medium text-slate-700">
+                  <tr key={r.emp.id} className="border-t border-border">
+                    <td className="px-2 py-1.5 font-medium text-foreground">
                       {r.emp.name}
                       {!r.emp.active && (
-                        <span className="ml-1 text-xs text-slate-400">(inactive)</span>
+                        <span className="ml-1 text-xs text-faint">(inactive)</span>
                       )}
                     </td>
                     <td className="px-2 py-1.5 text-right tabular-nums">
                       {r.emp.payType === "PER_SHIFT" ? r.shifts : "—"}
                     </td>
-                    <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">
+                    <td className="px-2 py-1.5 text-right tabular-nums text-muted">
                       {r.emp.payType === "PER_SHIFT" ? inr(r.shiftRate) : "monthly"}
                     </td>
                     <td className="px-2 py-1.5 text-right tabular-nums">
                       {inr(r.basePay)}
                     </td>
-                    <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">
+                    <td className="px-2 py-1.5 text-right tabular-nums text-muted">
                       {r.extraPay > 0 ? inr(r.extraPay) : "—"}
                     </td>
                     <td
                       className={
                         "px-2 py-1.5 text-right tabular-nums " +
                         (r.se < 0
-                          ? "text-red-600"
+                          ? "text-red-600 dark:text-red-400"
                           : r.se > 0
-                            ? "text-emerald-600"
-                            : "text-slate-500")
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : "text-muted")
                       }
                     >
                       {r.se === 0
@@ -153,7 +153,7 @@ export default async function SalaryPage({
             </tbody>
             {rows.length > 0 && (
               <tfoot>
-                <tr className="border-t-2 border-slate-200 font-semibold">
+                <tr className="border-t-2 border-border font-semibold">
                   <td className="px-2 py-2" colSpan={6}>
                     Total payable
                   </td>

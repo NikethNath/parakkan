@@ -34,7 +34,7 @@ export default function AttendanceDay({ date, rows }: { date: string; rows: Row[
   return (
     <div className="overflow-x-auto">
     <table className="w-full min-w-[20rem] text-sm">
-      <thead className="text-left text-slate-500">
+      <thead className="text-left text-muted">
         <tr>
           <th className="px-2 py-1.5 font-medium">Employee</th>
           <th className="px-2 py-1.5 font-medium">Morning</th>
@@ -43,8 +43,8 @@ export default function AttendanceDay({ date, rows }: { date: string; rows: Row[
       </thead>
       <tbody>
         {rows.map((r) => (
-          <tr key={r.employeeId} className="border-t border-slate-100">
-            <td className="px-2 py-1.5 font-medium text-slate-700">{r.name}</td>
+          <tr key={r.employeeId} className="border-t border-border">
+            <td className="px-2 py-1.5 font-medium text-foreground">{r.name}</td>
             <td className="px-2 py-1.5">
               <Cell
                 value={r.morning}
@@ -78,12 +78,12 @@ function Cell({
 }) {
   const tone =
     value === "PRESENT"
-      ? "text-emerald-700 border-emerald-300 bg-emerald-50"
+      ? "text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-500/40 bg-emerald-50 dark:bg-emerald-500/10"
       : value === "ABSENT"
-        ? "text-red-700 border-red-300 bg-red-50"
+        ? "text-red-700 dark:text-red-300 border-red-300 dark:border-red-500/40 bg-red-50 dark:bg-red-500/10"
         : value === "LEAVE"
-          ? "text-amber-700 border-amber-300 bg-amber-50"
-          : "text-slate-500 border-slate-300";
+          ? "text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/10"
+          : "text-muted border-border";
   return (
     <select
       value={value ?? "CLEAR"}

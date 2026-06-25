@@ -134,15 +134,15 @@ export default function StaffManager({ initialStaff }: { initialStaff: Staff[] }
       {editing === null && (
         <button
           onClick={startAdd}
-          className="rounded-lg bg-sky-600 px-4 py-2 font-semibold text-white hover:bg-sky-700"
+          className="rounded-lg bg-accent px-4 py-2 font-semibold text-white hover:bg-accent-strong"
         >
           + Add staff
         </button>
       )}
 
       {editing !== null && (
-        <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+        <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">
             {editing === "new" ? "Add staff" : "Edit staff"}
           </h2>
           <div className="grid grid-cols-2 gap-3">
@@ -212,18 +212,18 @@ export default function StaffManager({ initialStaff }: { initialStaff: Staff[] }
               />
             </Field>
           </div>
-          {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+          {error && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
           <div className="mt-4 flex gap-2">
             <button
               onClick={save}
               disabled={saving}
-              className="rounded-lg bg-sky-600 px-4 py-2 font-semibold text-white hover:bg-sky-700 disabled:opacity-60"
+              className="rounded-lg bg-accent px-4 py-2 font-semibold text-white hover:bg-accent-strong disabled:opacity-60"
             >
               {saving ? "Saving…" : "Save"}
             </button>
             <button
               onClick={cancel}
-              className="rounded-lg border border-slate-300 px-4 py-2 font-medium text-slate-700 hover:bg-slate-50"
+              className="rounded-lg border border-border px-4 py-2 font-medium text-foreground hover:bg-surface-2"
             >
               Cancel
             </button>
@@ -231,13 +231,13 @@ export default function StaffManager({ initialStaff }: { initialStaff: Staff[] }
         </section>
       )}
 
-      <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+      <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">
           Staff
         </h2>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="text-left text-slate-500">
+            <thead className="text-left text-muted">
               <tr>
                 <th className="px-2 py-1.5 font-medium">Name</th>
                 <th className="px-2 py-1.5 font-medium">Username</th>
@@ -251,17 +251,17 @@ export default function StaffManager({ initialStaff }: { initialStaff: Staff[] }
               {initialStaff.map((s) => (
                 <tr
                   key={s.id}
-                  className={"border-t border-slate-100 " + (s.active ? "" : "opacity-50")}
+                  className={"border-t border-border " + (s.active ? "" : "opacity-50")}
                 >
-                  <td className="px-2 py-1.5 font-medium text-slate-700">{s.name}</td>
-                  <td className="px-2 py-1.5 text-slate-500">{s.username}</td>
+                  <td className="px-2 py-1.5 font-medium text-foreground">{s.name}</td>
+                  <td className="px-2 py-1.5 text-muted">{s.username}</td>
                   <td className="px-2 py-1.5">{s.role === "ADMIN" ? "Admin" : "Employee"}</td>
-                  <td className="px-2 py-1.5 text-slate-600">
+                  <td className="px-2 py-1.5 text-muted">
                     {s.payType === "PER_SHIFT"
                       ? `${inr(s.shiftRate)}/shift`
                       : `${inr(s.monthlySalary)}/mo`}
                     {s.extraPay > 0 && (
-                      <span className="text-xs text-slate-400">
+                      <span className="text-xs text-faint">
                         {" "}
                         +{inr(s.extraPay)} extra
                       </span>
@@ -269,21 +269,21 @@ export default function StaffManager({ initialStaff }: { initialStaff: Staff[] }
                   </td>
                   <td className="px-2 py-1.5">
                     {s.active ? (
-                      <span className="text-emerald-600">Active</span>
+                      <span className="text-emerald-600 dark:text-emerald-400">Active</span>
                     ) : (
-                      <span className="text-slate-400">Inactive</span>
+                      <span className="text-faint">Inactive</span>
                     )}
                   </td>
                   <td className="px-2 py-1.5 text-right">
                     <button
                       onClick={() => startEdit(s)}
-                      className="mr-3 font-medium text-sky-600 hover:underline"
+                      className="mr-3 font-medium text-accent hover:underline"
                     >
                       Edit
                     </button>
                     <button
                       onClick={() => toggleActive(s)}
-                      className="font-medium text-slate-500 hover:underline"
+                      className="font-medium text-muted hover:underline"
                     >
                       {s.active ? "Deactivate" : "Activate"}
                     </button>
@@ -299,12 +299,12 @@ export default function StaffManager({ initialStaff }: { initialStaff: Staff[] }
 }
 
 const inp =
-  "w-full rounded-lg border border-slate-300 px-3 py-2 text-base outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-200";
+  "w-full rounded-lg border border-border px-3 py-2 text-base outline-none focus:border-accent focus:ring-2 focus:ring-accent/30";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-sm font-medium text-slate-700">{label}</span>
+      <span className="mb-1 block text-sm font-medium text-foreground">{label}</span>
       {children}
     </label>
   );

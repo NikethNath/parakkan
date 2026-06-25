@@ -1,5 +1,75 @@
 @import "tailwindcss";
 
+/* Manual dark mode via a `.dark` class on <html> (toggle + system default). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light;
+  --bg: #eef1f6;
+  --bg-grad: radial-gradient(1100px 560px at 50% -10%, #ffffff 0%, #eef1f6 60%);
+  --surface: #ffffff;
+  --surface-2: #f4f6fa;
+  --foreground: #0f172a;
+  --muted: #5b6573;
+  --faint: #97a2b3;
+  --border: #e4e8ef;
+  --accent: #4f46e5;
+  --accent-strong: #4338ca;
+}
+
+.dark {
+  color-scheme: dark;
+  --bg: #0a0f1c;
+  --bg-grad: radial-gradient(1100px 560px at 50% -10%, #141d33 0%, #0a0f1c 60%);
+  --surface: #141b2b;
+  --surface-2: #1b2435;
+  --foreground: #e8edf6;
+  --muted: #9aa6b8;
+  --faint: #6b7892;
+  --border: #283246;
+  --accent: #6366f1;
+  --accent-strong: #818cf8;
+}
+
+/* Expose tokens as Tailwind color/shadow utilities (bg-surface, text-muted, …).
+   `inline` keeps the var() reference so they switch live with .dark. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --shadow-soft: 0 1px 2px rgba(2, 6, 23, 0.04), 0 6px 20px rgba(2, 6, 23, 0.06);
+  --shadow-pop: 0 8px 30px rgba(2, 6, 23, 0.12);
+}
+
+html,
+body {
+  background-color: var(--bg);
+  color: var(--foreground);
+}
+body {
+  background-image: var(--bg-grad);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Form controls follow the theme (incl. native date/select popups & scrollbars) */
+input,
+select,
+textarea {
+  background-color: var(--surface);
+  color: var(--foreground);
+}
+::placeholder {
+  color: var(--faint);
+}
+
 /* Horizontally-scrollable rows (e.g. the admin nav) without a visible scrollbar */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
@@ -7,17 +77,6 @@
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
-}
-
-:root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
-}
-
-html,
-body {
-  background: var(--background);
-  color: var(--foreground);
 }
 
 /* Hide number-input spinners for a cleaner data-entry feel */

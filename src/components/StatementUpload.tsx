@@ -39,11 +39,11 @@ export default function StatementUpload() {
   }
 
   return (
-    <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
+    <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
+      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted">
         Upload bank statement
       </h2>
-      <p className="mb-3 text-xs text-slate-500">
+      <p className="mb-3 text-xs text-muted">
         SBI statement export (.xls/.csv/.txt). GPay (PhonePe, T+1) and POS (DDMM)
         credits are detected automatically; re-uploading is safe.
       </p>
@@ -57,13 +57,13 @@ export default function StatementUpload() {
         <button
           onClick={upload}
           disabled={!file || busy}
-          className="rounded-lg bg-sky-600 px-4 py-1.5 font-medium text-white hover:bg-sky-700 disabled:opacity-60"
+          className="rounded-lg bg-accent px-4 py-1.5 font-medium text-white hover:bg-accent-strong disabled:opacity-60"
         >
           {busy ? "Uploading…" : "Upload"}
         </button>
       </div>
-      {msg && <p className="mt-2 text-sm text-emerald-700">{msg}</p>}
-      {err && <p className="mt-2 text-sm text-red-600">{err}</p>}
+      {msg && <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-300">{msg}</p>}
+      {err && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{err}</p>}
     </section>
   );
 }

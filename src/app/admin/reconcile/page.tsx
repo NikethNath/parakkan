@@ -62,20 +62,20 @@ export default async function ReconcilePage({
     <>
       <StatementUpload />
 
-      <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+      <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="text-base font-bold text-slate-800">Reconciliation — {monthLabel}</h2>
-            <p className="text-xs text-slate-500">
+            <h2 className="text-base font-bold text-foreground">Reconciliation — {monthLabel}</h2>
+            <p className="text-xs text-muted">
               Δ = entered by staff − received in bank. Off by &gt; {inr(TOLERANCE)} is flagged.
             </p>
             {lastUploadedLabel ? (
-              <p className="mt-1 text-xs text-emerald-600">
+              <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">
                 ✓ {bankCount} transactions stored (cached) · last upload {lastUploadedLabel}.
                 Re-uploading is de-duplicated.
               </p>
             ) : (
-              <p className="mt-1 text-xs text-slate-400">No statement uploaded yet.</p>
+              <p className="mt-1 text-xs text-faint">No statement uploaded yet.</p>
             )}
           </div>
           <form className="flex items-end gap-2">
@@ -83,9 +83,9 @@ export default async function ReconcilePage({
               type="month"
               name="month"
               defaultValue={month}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+              className="rounded-lg border border-border px-3 py-1.5 text-sm"
             />
-            <button className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700">
+            <button className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-strong">
               Apply
             </button>
           </form>

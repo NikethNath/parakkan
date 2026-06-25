@@ -24,16 +24,16 @@ export default async function AdminDashboard() {
         <Card label="Total short (recent)" value={inr(Math.abs(totalShort))} tone="red" />
       </div>
 
-      <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+      <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">
           All submissions
         </h2>
         {entries.length === 0 ? (
-          <p className="py-6 text-center text-sm text-slate-400">No submissions yet.</p>
+          <p className="py-6 text-center text-sm text-faint">No submissions yet.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="text-left text-slate-500">
+              <thead className="text-left text-muted">
                 <tr>
                   <th className="px-2 py-1.5 font-medium">Date</th>
                   <th className="px-2 py-1.5 font-medium">Shift</th>
@@ -49,7 +49,7 @@ export default async function AdminDashboard() {
                   const se = toNum(e.shortExcess);
                   const lbl = shortExcessLabel(se);
                   return (
-                    <tr key={e.id} className="border-t border-slate-100 hover:bg-slate-50">
+                    <tr key={e.id} className="border-t border-border hover:bg-surface-2">
                       <td className="px-2 py-1.5">
                         {e.businessDate.toLocaleDateString("en-IN", {
                           day: "2-digit",
@@ -65,21 +65,21 @@ export default async function AdminDashboard() {
                         className={
                           "px-2 py-1.5 text-right font-medium tabular-nums " +
                           (lbl === "SHORT"
-                            ? "text-red-600"
+                            ? "text-red-600 dark:text-red-400"
                             : lbl === "EXCESS"
-                              ? "text-emerald-600"
-                              : "text-slate-600")
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : "text-muted")
                         }
                       >
                         {lbl === "BALANCED" ? "—" : `${lbl} ${inr(Math.abs(se))}`}
                       </td>
-                      <td className="px-2 py-1.5 text-slate-500">
+                      <td className="px-2 py-1.5 text-muted">
                         {e.status === "VERIFIED" ? "Verified" : "Submitted"}
                       </td>
                       <td className="px-2 py-1.5 text-right">
                         <Link
                           href={`/admin/entries/${e.id}`}
-                          className="font-medium text-sky-600 hover:underline"
+                          className="font-medium text-accent hover:underline"
                         >
                           Open
                         </Link>
@@ -106,12 +106,12 @@ function Card({
   tone: "emerald" | "red";
 }) {
   return (
-    <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-      <p className="text-xs text-slate-500">{label}</p>
+    <div className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
+      <p className="text-xs text-muted">{label}</p>
       <p
         className={
           "mt-1 text-2xl font-bold " +
-          (tone === "emerald" ? "text-emerald-600" : "text-red-600")
+          (tone === "emerald" ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400")
         }
       >
         {value}
