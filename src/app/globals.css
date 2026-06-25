@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+}
+
+html,
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* Hide number-input spinners for a cleaner data-entry feel */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}

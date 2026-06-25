@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN     "extraPay" DECIMAL(12,2) NOT NULL DEFAULT 0;
