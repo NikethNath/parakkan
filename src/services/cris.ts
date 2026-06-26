@@ -197,10 +197,23 @@ async function downloadXls(page: Page): Promise<Buffer | null> {
 }
 
 async function logout(page: Page) {
-  // Click the avatar (top-right) to open the profile drawer, then the Logout row.
-  await page.locator("img.profilePic").click().catch(() => {});
-  await page.waitForTimeout(3000); // the profile drawer slides open
-  await page.locator(".profileDrower > div > div:nth-child(5)").click().catch(() => {});
+  // Avatar → profile drawer → Logout → "Confirm" dialog. CRIS requires the
+  // confirm, or the session stays active (single-session). The dialog's class
+  // names are minified, so target the stable button text.
+  await page.locator("img.profilePic").click({ timeout: 10000 }).catch(() => {});
+  await page.waitForTimeout(2500); // the profile drawer slides open
+  await page
+    .locator(".profileDrower")
+    .getByText("Logout", { exact: true })
+    .first()
+    .click({ timeout: 10000 })
+    .catch(() => {});
+  await page.waitForTimeout(2500); // the "Are you sure… logout?" dialog appears
+  await page
+    .getByText("Confirm", { exact: true })
+    .last() // the dialog TITLE is also "Confirm"; the button is the last match
+    .click({ timeout: 10000 })
+    .catch(() => {});
   await page
     .waitForFunction(() => /\/login/.test(location.pathname), { timeout: 20000 })
     .catch(() => {});

@@ -73,9 +73,11 @@ export async function POST(req: Request) {
       });
       if (result.ok && result.report) {
         const imported = await storeCrisReport(result.report);
+        const days = new Set(result.report.rows.map((r) => r.businessDate)).size;
         state.result = {
           ok: true,
           imported,
+          days,
           from: result.report.fromDate,
           to: result.report.toDate,
         };

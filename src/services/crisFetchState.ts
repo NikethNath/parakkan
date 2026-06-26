@@ -7,7 +7,8 @@
 
 export interface CrisFetchResult {
   ok: boolean;
-  imported?: number;
+  imported?: number; // total rows stored (MS + HSD per day)
+  days?: number; // distinct business days covered
   from?: string;
   to?: string;
   error?: string;

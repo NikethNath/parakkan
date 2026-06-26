@@ -60,7 +60,13 @@ export default function CrisFetchForm({
         await new Promise((r) => setTimeout(r, 6000));
         let s: {
           running?: boolean;
-          result?: { ok: boolean; imported?: number; error?: string; step?: string } | null;
+          result?: {
+            ok: boolean;
+            imported?: number;
+            days?: number;
+            error?: string;
+            step?: string;
+          } | null;
         };
         try {
           s = await (await fetch("/api/cris/fetch")).json();
@@ -69,7 +75,10 @@ export default function CrisFetchForm({
         }
         if (!s.running && s.result) {
           if (s.result.ok) {
-            setMsg(`Fetched & imported ${s.result.imported} day-rows from CRIS.`);
+            setMsg(
+              `Fetched ${s.result.days} day${s.result.days === 1 ? "" : "s"} from CRIS ` +
+                `(${s.result.imported} records — MS & HSD).`,
+            );
             router.refresh();
           } else {
             setMsg(null);

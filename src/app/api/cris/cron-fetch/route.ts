@@ -58,5 +58,6 @@ export async function POST(req: Request) {
   }
 
   const imported = await storeCrisReport(result.report);
-  return NextResponse.json({ ok: true, imported, from: fromDate, to: toDate });
+  const days = new Set(result.report.rows.map((r) => r.businessDate)).size;
+  return NextResponse.json({ ok: true, imported, days, from: fromDate, to: toDate });
 }
