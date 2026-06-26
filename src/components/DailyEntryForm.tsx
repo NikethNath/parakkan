@@ -522,7 +522,7 @@ export default function DailyEntryForm({
 // --- small presentational helpers -----------------------------------------
 
 const inputCls =
-  "w-full rounded-lg border border-border px-3 py-2 text-base outline-none focus:border-accent focus:ring-2 focus:ring-accent/30";
+  "w-full min-w-0 rounded-lg border border-border px-3 py-2 text-base outline-none focus:border-accent focus:ring-2 focus:ring-accent/30";
 const lineInput = "rounded border border-border px-2 py-1 text-sm";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -538,7 +538,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="block">
+    <label className="block min-w-0">
       <span className="mb-1 block text-sm font-medium text-foreground">{label}</span>
       {children}
     </label>

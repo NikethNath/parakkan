@@ -43,31 +43,23 @@ export default async function CrisPage({
     prisma.dailyEntry.aggregate({ _max: { businessDate: true }, _min: { businessDate: true } }),
   ]);
 
-  // Pre-fill the CRIS fetch range to the uncached gap: last cached CRIS day + 1
-  // → newest day we have any data for (capped at today).
+  // Pre-fill the CRIS fetch range to RE-FETCH the last cached day (it may have
+  // been cached while that day was still in progress / incomplete) through today.
   const todayIso = isoDate(new Date());
   const crisMax = crisAgg._max.businessDate;
-  const maxDates = [bankAgg._max.businessDate, entryAgg._max.businessDate]
-    .filter((d): d is Date => !!d)
-    .map(isoDate);
   const minDates = [bankAgg._min.businessDate, entryAgg._min.businessDate]
     .filter((d): d is Date => !!d)
     .map(isoDate);
-  let newest = maxDates.length ? maxDates.sort().at(-1)! : todayIso;
-  if (newest > todayIso) newest = todayIso;
   const oldest = minDates.length ? minDates.sort()[0] : isoDate(start);
 
-  const gapFrom = crisMax ? isoDate(new Date(crisMax.getTime() + 86400000)) : oldest;
-  const upToDate = gapFrom > newest;
-  const fetchFrom = upToDate ? newest : gapFrom;
+  const fetchFrom = crisMax ? isoDate(crisMax) : oldest; // last cached day, inclusive
+  const newest = todayIso;
   const crisMaxLabel = crisMax
     ? crisMax.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })
     : null;
-  const gapHint = upToDate
-    ? `CRIS is cached through ${crisMaxLabel} — nothing new to fetch.`
-    : crisMax
-      ? `Pre-filled to the uncached gap (CRIS cached through ${crisMaxLabel}).`
-      : "Pre-filled to your full data range (no CRIS data cached yet).";
+  const gapHint = crisMax
+    ? `Re-fetches from your last cached day (${crisMaxLabel}) through today — so an incomplete last day gets refreshed, plus any newer days.`
+    : "Pre-filled to your full data range (no CRIS data cached yet).";
 
   const build = (product: "MS" | "HSD"): Row[] => {
     const map = new Map<string, Row>();
