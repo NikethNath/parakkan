@@ -29,6 +29,7 @@ services:
       DATABASE_URL: postgresql://hpcl:${POSTGRES_PASSWORD}@db:5432/hpcl?schema=public
       SESSION_SECRET: ${SESSION_SECRET}
       SECRET_KEY: ${SECRET_KEY}
+      CRON_SECRET: ${CRON_SECRET}
       ADMIN_USERNAME: ${ADMIN_USERNAME}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       CHROME_PATH: /usr/bin/chromium

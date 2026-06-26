@@ -35,6 +35,8 @@ export default function CrisFetchForm({
     setMsg(null);
     setErr(null);
     try {
+      // Kick off the background job — returns immediately (the headless run
+      // takes 1-2 min, too long to hold the request open).
       const res = await fetch("/api/cris/fetch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -42,14 +44,45 @@ export default function CrisFetchForm({
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setErr((d.error ?? "Fetch failed") + (d.step ? ` (at: ${d.step})` : ""));
+        setErr((d.error ?? "Could not start fetch") + (d.step ? ` (at: ${d.step})` : ""));
+        setBusy(false);
         return;
       }
-      setMsg(`Fetched & imported ${d.imported} day-rows from CRIS.`);
-      router.refresh();
+      setMsg(
+        d.running
+          ? "A fetch is already running — waiting for it to finish…"
+          : "Logging into CRIS and downloading the report. This takes about a minute or two…",
+      );
+
+      // Poll for the result.
+      const deadline = Date.now() + 5 * 60 * 1000;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 6000));
+        let s: {
+          running?: boolean;
+          result?: { ok: boolean; imported?: number; error?: string; step?: string } | null;
+        };
+        try {
+          s = await (await fetch("/api/cris/fetch")).json();
+        } catch {
+          continue; // transient network blip — keep polling
+        }
+        if (!s.running && s.result) {
+          if (s.result.ok) {
+            setMsg(`Fetched & imported ${s.result.imported} day-rows from CRIS.`);
+            router.refresh();
+          } else {
+            setMsg(null);
+            setErr((s.result.error ?? "Fetch failed") + (s.result.step ? ` (at: ${s.result.step})` : ""));
+          }
+          setBusy(false);
+          return;
+        }
+      }
+      setMsg("Still running — taking longer than usual. Refresh this page shortly to see the imported data.");
+      setBusy(false);
     } catch {
-      setErr("Network error / the fetch timed out.");
-    } finally {
+      setErr("Could not start the fetch (network).");
       setBusy(false);
     }
   }
@@ -89,7 +122,7 @@ export default function CrisFetchForm({
           disabled={busy || !configured}
           className="rounded-lg bg-emerald-600 px-4 py-1.5 font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
         >
-          {busy ? "Fetching… (up to ~1 min)" : "Fetch from CRIS"}
+          {busy ? "Fetching…" : "Fetch from CRIS"}
         </button>
       </div>
       {!configured && (
