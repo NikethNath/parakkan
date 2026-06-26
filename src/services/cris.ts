@@ -7,6 +7,9 @@ import { parseCrisReport, type CrisReport } from "./crisReport";
  * report, filters by RO SAP code + date range (Product = All), downloads the
  * XLS, parses it, then logs out.
  *
+ * Selectors below were reverse-engineered against the live CRIS portal
+ * (Angular + PrimeNG). CRIS is slow, so each step has a generous settle wait.
+ *
  * ⚠ CRIS enforces a single active session. This must log out cleanly or the
  * next login (yours or the next fetch) is blocked until the session times out.
  */
@@ -55,7 +58,7 @@ export async function fetchDailySalesReport(opts: FetchOpts): Promise<FetchResul
   const browser = await chromium.launch({
     executablePath: exe,
     headless: true,
-    args: ["--no-sandbox", "--disable-dev-shm-usage"],
+    args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
   });
   let step = "login";
   try {
@@ -65,14 +68,29 @@ export async function fetchDailySalesReport(opts: FetchOpts): Promise<FetchResul
     });
     const page = await ctx.newPage();
 
-    // 1) Login
-    await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded", timeout: 60000 });
-    await page.waitForSelector("#strUserId", { timeout: 30000 });
+    // 1) Login. The portal can be slow to serve the login page, and the
+    //    dashboard takes several seconds to render after submit.
+    let loaded = false;
+    for (let a = 1; a <= 3 && !loaded; a++) {
+      try {
+        await page.goto(`${BASE}/login`, { waitUntil: "commit", timeout: 120000 });
+        await page.waitForSelector("#strUserId", { timeout: 60000 });
+        loaded = true;
+      } catch {
+        await page.waitForTimeout(2500);
+      }
+    }
+    if (!loaded) {
+      return { ok: false, step, error: "Could not load the CRIS login page (network/timeout)." };
+    }
+    await page.waitForTimeout(2000);
     await page.fill("#strUserId", opts.username);
     await page.fill("#password", opts.password);
     await page.click("#submitbtn");
-    await page.waitForLoadState("networkidle", { timeout: 60000 }).catch(() => {});
-    await page.waitForTimeout(3000);
+    await page
+      .waitForFunction(() => !location.pathname.endsWith("/login"), { timeout: 45000 })
+      .catch(() => {});
+    await page.waitForTimeout(15000); // CRIS dashboard is slow to come up after login
     if (/\/login/.test(page.url())) {
       return {
         ok: false,
@@ -82,45 +100,71 @@ export async function fetchDailySalesReport(opts: FetchOpts): Promise<FetchResul
       };
     }
 
-    // 2) Open the Daily Sales Report
+    // 2) Open the Daily Sales Report — the filter modal auto-opens.
     step = "open-report";
     await page.goto(`${BASE}/home/layout/report/dsr`, {
       waitUntil: "domcontentloaded",
       timeout: 60000,
     });
-    await page.waitForTimeout(3500);
-    await page.locator('button:has-text("Filter")').first().click().catch(() => {});
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(8000);
+    const sapLabel = page.locator("text=/Select RO SAP Code/i").first();
+    const filterReady = await sapLabel
+      .waitFor({ state: "visible", timeout: 60000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!filterReady) {
+      // Fallback: explicitly click the Filter button to open the modal.
+      await page
+        .locator('.myBtn[title="Filter"], button[title="Filter"]')
+        .first()
+        .click({ force: true })
+        .catch(() => {});
+      await page.waitForTimeout(8000);
+      await sapLabel.waitFor({ state: "visible", timeout: 30000 }).catch(() => {});
+    }
 
-    // 3) Filter: dates + RO SAP code (Product left as default "All")
+    // 3) Filter: RO SAP code (PrimeNG multiselect) + date range.
     step = "filter";
+    const sap = opts.sapCode || opts.username;
+    await sapLabel.click().catch(() => {}); // open the multiselect panel
+    await page.waitForTimeout(5000);
+    await page
+      .locator(".p-multiselect-item, .p-dropdown-item, li[role=option]")
+      .filter({ hasText: sap })
+      .first()
+      .click()
+      .catch(() => {}); // tick the RO option
+    await page.waitForTimeout(3000);
+    await page.keyboard.press("Escape").catch(() => {}); // close the panel covering the form
+    await page.waitForTimeout(3000);
+
     await page
       .fill('input[formcontrolname="strFromDate"]', `${opts.fromDate}T00:00`)
       .catch(() => {});
     await page
       .fill('input[formcontrolname="strToDate"]', `${opts.toDate}T23:59`)
       .catch(() => {});
-    await selectSapCode(page, opts.sapCode);
+    await page.waitForTimeout(2000);
 
-    await page.locator('button:has-text("Ok")').first().click().catch(() => {});
+    await page.locator('.submit-btn:has-text("Ok")').last().click().catch(() => {});
     await page.waitForLoadState("networkidle", { timeout: 60000 }).catch(() => {});
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(8000); // the report grid loads
 
-    // 4) Download the XLS
+    // 4) Download the XLS (round download-icon → "Excel" option in the popup).
     step = "download";
     const buf = await downloadXls(page);
     if (!buf) {
       return { ok: false, step, error: "Could not download the report XLS." };
     }
 
-    // 5) Parse
+    // 5) Parse.
     step = "parse";
     const report = parseCrisReport(buf);
     if (report.rows.length === 0) {
       return { ok: false, step, error: "Downloaded report had no MS/HSD rows." };
     }
 
-    // 6) Log out (best-effort, important for single-session)
+    // 6) Log out (important — CRIS allows only one active session).
     step = "logout";
     await logout(page).catch(() => {});
 
@@ -132,56 +176,14 @@ export async function fetchDailySalesReport(opts: FetchOpts): Promise<FetchResul
   }
 }
 
-async function selectSapCode(page: Page, sap?: string) {
-  // Native <select> first.
-  const nativeCount = await page.locator("select").count().catch(() => 0);
-  if (nativeCount > 0) {
-    const sel = page.locator("select").first();
-    const options = await sel.locator("option").allTextContents().catch(() => []);
-    let idx = sap ? options.findIndex((o) => o.includes(sap)) : -1;
-    if (idx < 0) idx = options.findIndex((o) => /\d{3,}/.test(o)); // first code-looking option
-    if (idx >= 0) await sel.selectOption({ index: idx }).catch(() => {});
-    return;
-  }
-  // Custom dropdown: click the "Select RO SAP Code" trigger, then the option.
-  const trigger = page.locator("text=Select RO SAP Code").first();
-  if (await trigger.count().catch(() => 0)) {
-    await trigger.click().catch(() => {});
-    await page.waitForTimeout(800);
-    const opt = sap
-      ? page.locator(`[role=option]:has-text("${sap}"), li:has-text("${sap}"), mat-option:has-text("${sap}")`).first()
-      : page.locator("[role=option], mat-option, li").first();
-    await opt.click().catch(() => {});
-  }
-}
-
 async function downloadXls(page: Page): Promise<Buffer | null> {
-  // Trigger the download control (top-right of the grid). Try several patterns.
-  const triggers = [
-    'button[title*="Download" i]',
-    '[aria-label*="Download" i]',
-    '[class*="download" i]',
-    'mat-icon:has-text("download")',
-    'mat-icon:has-text("file_download")',
-  ];
-  for (const sel of triggers) {
-    const l = page.locator(sel).first();
-    if (await l.count().catch(() => 0)) {
-      await l.click().catch(() => {});
-      break;
-    }
-  }
-  await page.waitForTimeout(800);
-
+  // The download control is a round icon at the top-right of the grid. Clicking
+  // it reveals XLS/PDF buttons ~5s later; we pick XLS.
+  await page.locator("span.download-icon").click().catch(() => {});
+  await page.waitForTimeout(5000);
   const [download] = await Promise.all([
     page.waitForEvent("download", { timeout: 30000 }).catch(() => null),
-    (async () => {
-      // A menu may offer PDF/XLS — pick XLS/Excel.
-      const xls = page
-        .locator('text=/\\bxls(x)?\\b/i, text=/excel/i, [aria-label*="xls" i], [title*="xls" i]')
-        .first();
-      if (await xls.count().catch(() => 0)) await xls.click().catch(() => {});
-    })(),
+    page.locator("div.download-xls").click().catch(() => {}),
   ]);
   if (!download) return null;
 
@@ -195,17 +197,11 @@ async function downloadXls(page: Page): Promise<Buffer | null> {
 }
 
 async function logout(page: Page) {
-  // Open the profile menu (top-right) then click logout.
-  const profile = page
-    .locator('[class*="profile" i], [class*="user" i], img[alt*="user" i], text=/parakkan petroleum/i')
-    .first();
-  if (await profile.count().catch(() => 0)) {
-    await profile.click().catch(() => {});
-    await page.waitForTimeout(700);
-  }
-  const out = page.locator('text=/log ?out/i, text=/sign ?out/i').first();
-  if (await out.count().catch(() => 0)) {
-    await out.click().catch(() => {});
-    await page.waitForTimeout(1500);
-  }
+  // Click the avatar (top-right) to open the profile drawer, then the Logout row.
+  await page.locator("img.profilePic").click().catch(() => {});
+  await page.waitForTimeout(3000); // the profile drawer slides open
+  await page.locator(".profileDrower > div > div:nth-child(5)").click().catch(() => {});
+  await page
+    .waitForFunction(() => /\/login/.test(location.pathname), { timeout: 20000 })
+    .catch(() => {});
 }

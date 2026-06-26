@@ -116,6 +116,36 @@ gunzip -c backups/hpcl-YYYYMMDD-HHMM.sql.gz | \
   docker compose -f docker-compose.prod.yml exec -T db psql -U hpcl hpcl
 ```
 
+## Daily CRIS auto-fetch (3 AM IST)
+Once your CRIS login is saved in the app (Admin → CRIS), the outlet's Daily Sales
+Report can be pulled automatically every night. `scripts/cris-fetch.sh` calls a
+token-protected endpoint that runs the same headless fetch as the **Fetch from
+CRIS** button. Run it at 3 AM IST, when no one is logged into CRIS (it allows
+only one active session).
+
+1. Add a strong secret to your server `.env` (same file as the other secrets):
+   ```bash
+   echo "CRON_SECRET=$(openssl rand -hex 24)" >> ~/parakkan/.env
+   docker compose -f ~/parakkan/docker-compose.prod.yml up -d   # reload env
+   ```
+2. Test it once by hand (you should see a JSON result and rows imported):
+   ```bash
+   ~/parakkan/scripts/cris-fetch.sh && tail -n 5 ~/parakkan/cris-fetch.log
+   ```
+3. Schedule it for 3:00 AM IST. DigitalOcean droplets run on UTC, so use either
+   `CRON_TZ` (if your cron supports it) or the UTC equivalent **21:30**:
+   ```bash
+   crontab -e
+   # add these two lines:
+   CRON_TZ=Asia/Kolkata
+   0 3 * * * /root/parakkan/scripts/cris-fetch.sh
+   # …or, without CRON_TZ, the plain-UTC equivalent of 3 AM IST:
+   # 30 21 * * * /root/parakkan/scripts/cris-fetch.sh
+   ```
+The cached data shows up under Admin → CRIS the same as a manual fetch. If a run
+fails (e.g. a stuck CRIS session), it's logged to `cris-fetch.log` and the next
+night retries; the manual button and upload remain as fallbacks.
+
 ## Updating to a new version
 Either push to GitHub (auto-deploys, see below) or, manually on the server:
 ```bash
