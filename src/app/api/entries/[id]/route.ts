@@ -35,6 +35,48 @@ const INPUT_FIELDS = [
   "pos",
 ] as const;
 
+export async function DELETE(
+  _req: Request,
+  ctx: { params: Promise<{ id: string }> },
+) {
+  const user = await getSessionUser();
+  if (!user || user.role !== "ADMIN") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const { id: idStr } = await ctx.params;
+  const id = Number(idStr);
+  if (!Number.isInteger(id)) {
+    return NextResponse.json({ error: "Bad id" }, { status: 400 });
+  }
+
+  const existing = await prisma.dailyEntry.findUnique({ where: { id } });
+  if (!existing) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      // Drop the attendance this submission auto-marked, so a test/bogus entry
+      // doesn't leave the staff counted "present". A manual mark is left alone.
+      await tx.attendance.deleteMany({
+        where: {
+          employeeId: existing.employeeId,
+          date: existing.businessDate,
+          shift: existing.shift,
+          source: "AUTO",
+        },
+      });
+      // Cascades to oil/expense/credit lines and the audit trail.
+      await tx.dailyEntry.delete({ where: { id } });
+    });
+    return NextResponse.json({ ok: true, id });
+  } catch (err) {
+    console.error("Failed to delete entry", err);
+    return NextResponse.json({ error: "Could not delete submission" }, { status: 500 });
+  }
+}
+
 export async function PATCH(
   req: Request,
   ctx: { params: Promise<{ id: string }> },

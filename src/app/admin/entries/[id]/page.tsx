@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { toNum, isoDate, inr } from "@/lib/format";
 import DailyEntryForm, { type DailyEntryInitial } from "@/components/DailyEntryForm";
+import DeleteEntryButton from "@/components/DeleteEntryButton";
 
 export default async function AdminEntryDetail({
   params,
@@ -142,6 +143,15 @@ export default async function AdminEntryDetail({
         initial={initial}
         redirectTo="/admin"
         admin
+      />
+
+      <DeleteEntryButton
+        entryId={entry.id}
+        label={`${entry.employee.name} · ${entry.businessDate.toLocaleDateString("en-IN", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        })} · ${entry.shift === "MORNING" ? "Morning" : "Evening"} · ${entry.product}`}
       />
     </div>
   );
