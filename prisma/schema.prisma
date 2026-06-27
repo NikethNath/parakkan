@@ -136,19 +136,45 @@ model OilLine {
 }
 
 model ExpenseLine {
-  id          Int        @id @default(autoincrement())
-  entry       DailyEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  id          Int            @id @default(autoincrement())
+  entry       DailyEntry     @relation(fields: [entryId], references: [id], onDelete: Cascade)
   entryId     Int
   description String
-  amount      Decimal    @db.Decimal(12, 2)
+  amount      Decimal        @db.Decimal(12, 2)
+  bucket      ExpenseBucket? @relation(fields: [bucketId], references: [id], onDelete: SetNull)
+  bucketId    Int?
 }
 
 model CreditLine {
-  id       Int        @id @default(autoincrement())
-  entry    DailyEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
-  entryId  Int
-  customer String
-  amount   Decimal    @db.Decimal(12, 2)
+  id         Int        @id @default(autoincrement())
+  entry      DailyEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  entryId    Int
+  customer   String
+  amount     Decimal    @db.Decimal(12, 2)
+  creditor   Creditor?  @relation(fields: [creditorId], references: [id], onDelete: SetNull)
+  creditorId Int?
+}
+
+// Admin-managed master list of credit accounts (khata). Staff type a free-text
+// customer per credit line; the admin maps each line to one of these.
+model Creditor {
+  id          Int          @id @default(autoincrement())
+  name        String       @unique
+  phone       String?
+  notes       String?
+  active      Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  creditLines CreditLine[]
+}
+
+// Admin-managed expense categories (e.g. Tea, Bank charges). Staff type a
+// free-text description per expense line; the admin classifies each into one.
+model ExpenseBucket {
+  id           Int           @id @default(autoincrement())
+  name         String        @unique
+  active       Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  expenseLines ExpenseLine[]
 }
 
 model EntryAudit {
