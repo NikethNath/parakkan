@@ -10,6 +10,7 @@ export type MasterItem = {
   notes?: string | null;
   active: boolean;
   count: number; // how many staff lines are classified under it
+  flag?: boolean; // optional per-row boolean (e.g. "is salary advance")
 };
 
 /**
@@ -23,12 +24,16 @@ export default function MasterListManager({
   items,
   withContact = false,
   noun = "entry",
+  flagField,
+  flagLabel,
 }: {
   title: string;
   endpoint: string;
   items: MasterItem[];
   withContact?: boolean;
   noun?: string;
+  flagField?: string;
+  flagLabel?: string;
 }) {
   const router = useRouter();
   const [name, setName] = useState("");
@@ -70,6 +75,16 @@ export default function MasterListManager({
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ active: !item.active }),
+    });
+    if (res.ok) router.refresh();
+  }
+
+  async function toggleFlag(item: MasterItem) {
+    if (!flagField) return;
+    const res = await fetch(`${endpoint}/${item.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [flagField]: !item.flag }),
     });
     if (res.ok) router.refresh();
   }
@@ -127,6 +142,7 @@ export default function MasterListManager({
                 <th className="px-2 py-1.5 font-medium">Name</th>
                 {withContact && <th className="px-2 py-1.5 font-medium">Phone</th>}
                 <th className="px-2 py-1.5 text-right font-medium">Entries</th>
+                {flagLabel && <th className="px-2 py-1.5 text-center font-medium">{flagLabel}</th>}
                 <th className="px-2 py-1.5 font-medium">Status</th>
                 <th className="px-2 py-1.5"></th>
               </tr>
@@ -140,6 +156,22 @@ export default function MasterListManager({
                   </td>
                   {withContact && <td className="px-2 py-1.5 text-muted">{it.phone || "—"}</td>}
                   <td className="px-2 py-1.5 text-right tabular-nums text-muted">{it.count}</td>
+                  {flagField && (
+                    <td className="px-2 py-1.5 text-center">
+                      <button
+                        type="button"
+                        onClick={() => toggleFlag(it)}
+                        className={
+                          "rounded-full px-2.5 py-0.5 text-xs font-medium " +
+                          (it.flag
+                            ? "bg-accent/15 text-accent"
+                            : "bg-surface-2 text-muted hover:text-foreground")
+                        }
+                      >
+                        {it.flag ? "✓ Yes" : "Mark"}
+                      </button>
+                    </td>
+                  )}
                   <td className="px-2 py-1.5">
                     {it.active ? (
                       <span className="text-emerald-600 dark:text-emerald-400">Active</span>

@@ -38,13 +38,20 @@ export default async function ExpensesPage() {
         title="Expense buckets"
         endpoint="/api/expense-buckets"
         noun="bucket"
+        flagField="isSalaryAdvance"
+        flagLabel="Salary advance?"
         items={buckets.map((b) => ({
           id: b.id,
           name: b.name,
           active: b.active,
           count: b._count.expenseLines,
+          flag: b.isSalaryAdvance,
         }))}
       />
+      <p className="-mt-2 px-1 text-xs text-muted">
+        Tip: mark a bucket as <strong>Salary advance</strong> for draws staff take from the
+        collection. Those still balance the day, but are netted out of pay on the Salary page.
+      </p>
 
       <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">

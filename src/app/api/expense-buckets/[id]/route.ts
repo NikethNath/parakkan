@@ -7,6 +7,7 @@ import { getSessionUser } from "@/lib/auth";
 const patchSchema = z.object({
   name: z.string().trim().min(1).optional(),
   active: z.boolean().optional(),
+  isSalaryAdvance: z.boolean().optional(),
 });
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -31,6 +32,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       data: {
         ...(data.name !== undefined ? { name: data.name } : {}),
         ...(data.active !== undefined ? { active: data.active } : {}),
+        ...(data.isSalaryAdvance !== undefined ? { isSalaryAdvance: data.isSalaryAdvance } : {}),
       },
     });
     return NextResponse.json({ ok: true });

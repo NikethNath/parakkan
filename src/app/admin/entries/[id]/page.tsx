@@ -149,15 +149,16 @@ export default async function AdminEntryDetail({
         redirectTo="/admin"
         admin
         startLocked
-      />
-
-      <DeleteEntryButton
-        entryId={entry.id}
-        label={`${entry.employee.name} · ${entry.businessDate.toLocaleDateString("en-IN", {
-          day: "2-digit",
-          month: "short",
-          year: "numeric",
-        })} · ${entry.shift === "MORNING" ? "Morning" : "Evening"} · ${entry.product}`}
+        deleteSlot={
+          <DeleteEntryButton
+            entryId={entry.id}
+            label={`${entry.employee.name} · ${entry.businessDate.toLocaleDateString("en-IN", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+            })} · ${entry.shift === "MORNING" ? "Morning" : "Evening"} · ${entry.product}`}
+          />
+        }
       />
     </div>
   );

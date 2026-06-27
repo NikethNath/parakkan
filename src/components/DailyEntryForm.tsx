@@ -79,6 +79,7 @@ export default function DailyEntryForm({
   redirectTo = "/employee",
   admin = false,
   startLocked = false,
+  deleteSlot,
 }: {
   mode?: "create" | "edit";
   entryId?: number;
@@ -86,6 +87,7 @@ export default function DailyEntryForm({
   redirectTo?: string;
   admin?: boolean;
   startLocked?: boolean;
+  deleteSlot?: React.ReactNode;
 } = {}) {
   const router = useRouter();
   const [form, setForm] = useState<FormState>(() => ({
@@ -509,6 +511,8 @@ export default function DailyEntryForm({
         )}
       />
       </fieldset>
+
+      {!locked && deleteSlot}
 
       {error && (
         <div className="rounded-lg bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300">

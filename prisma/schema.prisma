@@ -58,11 +58,13 @@ model User {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  entries         DailyEntry[] @relation("EmployeeEntries")
-  verifiedEntries DailyEntry[] @relation("VerifiedBy")
-  attendance      Attendance[]
-  audits          EntryAudit[]
-  uploads         BankUpload[]
+  entries          DailyEntry[]    @relation("EmployeeEntries")
+  verifiedEntries  DailyEntry[]    @relation("VerifiedBy")
+  attendance       Attendance[]
+  audits           EntryAudit[]
+  uploads          BankUpload[]
+  salaryPayments   SalaryPayment[] @relation("EmployeeSalaryPayments")
+  recordedPayments SalaryPayment[] @relation("RecordedSalaryPayments")
 }
 
 model DailyEntry {
@@ -182,11 +184,32 @@ model Creditor {
 // Admin-managed expense categories (e.g. Tea, Bank charges). Staff type a
 // free-text description per expense line; the admin classifies each into one.
 model ExpenseBucket {
-  id           Int           @id @default(autoincrement())
-  name         String        @unique
-  active       Boolean       @default(true)
-  createdAt    DateTime      @default(now())
-  expenseLines ExpenseLine[]
+  id              Int           @id @default(autoincrement())
+  name            String        @unique
+  active          Boolean       @default(true)
+  // When true, lines in this bucket are salary draws (not real expenses): they
+  // still balance the drawer, but are netted out of the staff's month-end pay.
+  isSalaryAdvance Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  expenseLines    ExpenseLine[]
+}
+
+// A salary payment / settlement recorded by the admin for an employee in a
+// given month (e.g. paying out the balance owed). Multiple rows per month are
+// allowed (partial payments). Net owed = earned − advances drawn − payments.
+model SalaryPayment {
+  id           Int      @id @default(autoincrement())
+  employee     User     @relation("EmployeeSalaryPayments", fields: [employeeId], references: [id])
+  employeeId   Int
+  month        String // YYYY-MM
+  amount       Decimal  @db.Decimal(12, 2)
+  note         String?
+  paidAt       DateTime @default(now())
+  recordedBy   User?    @relation("RecordedSalaryPayments", fields: [recordedById], references: [id])
+  recordedById Int?
+
+  @@index([month])
+  @@index([employeeId, month])
 }
 
 model EntryAudit {
