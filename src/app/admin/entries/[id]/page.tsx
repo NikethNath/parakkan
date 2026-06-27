@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { toNum, isoDate, inr } from "@/lib/format";
+import { toNum, isoDate, inr, istDateTime } from "@/lib/format";
 import DailyEntryForm, { type DailyEntryInitial } from "@/components/DailyEntryForm";
 import DeleteEntryButton from "@/components/DeleteEntryButton";
 
@@ -90,6 +90,10 @@ export default async function AdminEntryDetail({
                 year: "numeric",
               })}{" "}
               · {entry.shift === "MORNING" ? "Morning" : "Evening"} · {entry.product}
+            </p>
+            <p className="mt-0.5 text-xs text-faint">
+              Submitted {istDateTime(entry.submittedAt)} IST
+              {entry.verifiedAt ? ` · verified ${istDateTime(entry.verifiedAt)} IST` : ""}
             </p>
           </div>
           <span

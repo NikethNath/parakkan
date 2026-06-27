@@ -32,3 +32,28 @@ export function litres(n: number): string {
 export function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
+
+/** Date + time in IST, e.g. "27 Jun 2026, 6:30 pm". (Server runs on UTC.) */
+export function istDateTime(d: Date): string {
+  return d.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
+/** Compact IST date + time without the year, e.g. "27 Jun, 6:30 pm". */
+export function istDateTimeShort(d: Date): string {
+  return d.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+}

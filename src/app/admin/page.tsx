@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { inr, toNum } from "@/lib/format";
+import { inr, toNum, istDateTimeShort } from "@/lib/format";
 import { shortExcessLabel } from "@/lib/calc";
 
 export default async function AdminDashboard() {
@@ -40,6 +40,7 @@ export default async function AdminDashboard() {
                   <th className="px-2 py-1.5 font-medium">Employee</th>
                   <th className="px-2 py-1.5 font-medium">Product</th>
                   <th className="px-2 py-1.5 text-right font-medium">Short / Excess</th>
+                  <th className="px-2 py-1.5 font-medium">Submitted (IST)</th>
                   <th className="px-2 py-1.5 font-medium">Status</th>
                   <th className="px-2 py-1.5"></th>
                 </tr>
@@ -72,6 +73,9 @@ export default async function AdminDashboard() {
                         }
                       >
                         {lbl === "BALANCED" ? "—" : `${lbl} ${inr(Math.abs(se))}`}
+                      </td>
+                      <td className="px-2 py-1.5 whitespace-nowrap text-xs text-muted">
+                        {istDateTimeShort(e.submittedAt)}
                       </td>
                       <td className="px-2 py-1.5 text-muted">
                         {e.status === "VERIFIED" ? "Verified" : "Submitted"}
