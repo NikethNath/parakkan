@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   computeEntry,
@@ -104,6 +104,13 @@ export default function DailyEntryForm({
   // Admin entries open read-only so a value can't be nudged by accident; the
   // Edit button unlocks the form.
   const [locked, setLocked] = useState(startLocked);
+
+  // Keep the footer "Verified" box in sync if the cash-verified tick on the
+  // detail page is toggled (router.refresh passes a new initial.verified), so a
+  // later Save can't silently revert it.
+  useEffect(() => {
+    setVerified(initial?.verified ?? false);
+  }, [initial?.verified]);
 
   const set = (k: keyof FormState, v: string) =>
     setForm((f) => ({ ...f, [k]: v }));

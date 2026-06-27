@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { toNum, isoDate, inr, istDateTime } from "@/lib/format";
 import DailyEntryForm, { type DailyEntryInitial } from "@/components/DailyEntryForm";
 import DeleteEntryButton from "@/components/DeleteEntryButton";
+import CashVerifiedToggle from "@/components/CashVerifiedToggle";
 
 export default async function AdminEntryDetail({
   params,
@@ -93,21 +94,14 @@ export default async function AdminEntryDetail({
             </p>
             <p className="mt-0.5 text-xs text-faint">
               Submitted {istDateTime(entry.submittedAt)} IST
-              {entry.verifiedAt ? ` · verified ${istDateTime(entry.verifiedAt)} IST` : ""}
+              {entry.verifiedAt
+                ? ` · cash verified ${istDateTime(entry.verifiedAt)} IST${
+                    entry.verifiedBy ? ` by ${entry.verifiedBy.name}` : ""
+                  }`
+                : ""}
             </p>
           </div>
-          <span
-            className={
-              "rounded-full px-3 py-1 text-xs font-semibold " +
-              (entry.status === "VERIFIED"
-                ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                : "bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300")
-            }
-          >
-            {entry.status === "VERIFIED"
-              ? `Verified${entry.verifiedBy ? ` by ${entry.verifiedBy.name}` : ""}`
-              : "Submitted"}
-          </span>
+          <CashVerifiedToggle id={entry.id} verified={entry.status === "VERIFIED"} />
         </div>
       </div>
 

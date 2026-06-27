@@ -1,14 +1,40 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { inr, toNum, istDateTimeShort } from "@/lib/format";
+import { inr, toNum, istDateTimeShort, istToday, dayBoundsUTC, dayLabel } from "@/lib/format";
 import { shortExcessLabel } from "@/lib/calc";
 
-export default async function AdminDashboard() {
-  const entries = await prisma.dailyEntry.findMany({
-    orderBy: [{ businessDate: "desc" }, { id: "desc" }],
-    take: 50,
-    include: { employee: { select: { name: true } } },
-  });
+const isDate = (s?: string) => /^\d{4}-\d{2}-\d{2}$/.test(s ?? "");
+
+export default async function SubmissionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string; to?: string }>;
+}) {
+  const sp = await searchParams;
+  const today = istToday();
+  const toRaw = isDate(sp.to) ? sp.to! : today;
+  const fromRaw = isDate(sp.from) ? sp.from! : today.slice(0, 8) + "01"; // 1st of this month
+
+  // Both inclusive; tolerate a reversed range by ordering the bounds.
+  const lo = fromRaw <= toRaw ? fromRaw : toRaw;
+  const hi = fromRaw <= toRaw ? toRaw : fromRaw;
+  const start = new Date(lo + "T00:00:00.000Z");
+  const endExclusive = dayBoundsUTC(hi).end;
+
+  const [entries, unverified] = await Promise.all([
+    prisma.dailyEntry.findMany({
+      where: { businessDate: { gte: start, lt: endExclusive } },
+      orderBy: [{ businessDate: "desc" }, { id: "desc" }],
+      include: { employee: { select: { name: true } } },
+    }),
+    // Global "needs verification" alert — independent of the date range above.
+    prisma.dailyEntry.findMany({
+      where: { status: { not: "VERIFIED" } },
+      orderBy: [{ businessDate: "desc" }, { id: "desc" }],
+      take: 200,
+      include: { employee: { select: { name: true } } },
+    }),
+  ]);
 
   const totalShort = entries
     .filter((e) => toNum(e.shortExcess) < 0)
@@ -16,20 +42,106 @@ export default async function AdminDashboard() {
   const totalExcess = entries
     .filter((e) => toNum(e.shortExcess) > 0)
     .reduce((s, e) => s + toNum(e.shortExcess), 0);
+  const verifiedCount = entries.filter((e) => e.status === "VERIFIED").length;
 
   return (
     <>
+      {unverified.length > 0 && (
+        <section className="rounded-xl border border-amber-300 bg-amber-50 p-4 shadow-soft dark:border-amber-500/30 dark:bg-amber-500/10">
+          <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-300">
+            <span aria-hidden>⚠</span>
+            {unverified.length} submission{unverified.length === 1 ? "" : "s"} need cash verification
+          </h2>
+          <ul className="divide-y divide-amber-200/70 dark:divide-amber-500/20">
+            {unverified.map((e) => {
+              const se = toNum(e.shortExcess);
+              const lbl = shortExcessLabel(se);
+              return (
+                <li key={e.id}>
+                  <Link
+                    href={`/admin/entries/${e.id}`}
+                    className="flex items-center justify-between gap-3 py-2 text-sm transition hover:opacity-75"
+                  >
+                    <span className="text-foreground">
+                      <span className="font-medium">
+                        {e.businessDate.toLocaleDateString("en-IN", {
+                          day: "2-digit",
+                          month: "short",
+                          timeZone: "UTC",
+                        })}
+                      </span>{" "}
+                      · {e.shift === "MORNING" ? "Morning" : "Evening"} · {e.employee.name} ·{" "}
+                      {e.product}
+                    </span>
+                    <span className="flex items-center gap-2 whitespace-nowrap">
+                      {lbl !== "BALANCED" && (
+                        <span
+                          className={
+                            "tabular-nums " +
+                            (lbl === "SHORT"
+                              ? "text-red-600 dark:text-red-400"
+                              : "text-emerald-600 dark:text-emerald-400")
+                          }
+                        >
+                          {lbl} {inr(Math.abs(se))}
+                        </span>
+                      )}
+                      <span className="font-medium text-amber-700 dark:text-amber-300">Review →</span>
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
+      <form className="flex flex-wrap items-end gap-3 rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border print:hidden">
+        <label className="text-sm">
+          <span className="mb-1 block font-medium text-foreground">From</span>
+          <input
+            type="date"
+            name="from"
+            defaultValue={lo}
+            max={today}
+            className="rounded-lg border border-border px-3 py-1.5"
+          />
+        </label>
+        <label className="text-sm">
+          <span className="mb-1 block font-medium text-foreground">To</span>
+          <input
+            type="date"
+            name="to"
+            defaultValue={hi}
+            max={today}
+            className="rounded-lg border border-border px-3 py-1.5"
+          />
+        </label>
+        <button
+          type="submit"
+          className="rounded-lg bg-accent px-4 py-1.5 font-medium text-white hover:bg-accent-strong"
+        >
+          Apply
+        </button>
+      </form>
+
       <div className="grid grid-cols-2 gap-3">
-        <Card label="Total excess (recent)" value={inr(totalExcess)} tone="emerald" />
-        <Card label="Total short (recent)" value={inr(Math.abs(totalShort))} tone="red" />
+        <Card label="Total excess (period)" value={inr(totalExcess)} tone="emerald" />
+        <Card label="Total short (period)" value={inr(Math.abs(totalShort))} tone="red" />
       </div>
 
       <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">
-          All submissions
-        </h2>
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
+            Submissions · {dayLabel(lo)} – {dayLabel(hi)}
+          </h2>
+          <p className="text-xs text-muted">
+            {entries.length} submission{entries.length === 1 ? "" : "s"} · {verifiedCount} cash
+            verified
+          </p>
+        </div>
         {entries.length === 0 ? (
-          <p className="py-6 text-center text-sm text-faint">No submissions yet.</p>
+          <p className="py-6 text-center text-sm text-faint">No submissions in this period.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -41,7 +153,7 @@ export default async function AdminDashboard() {
                   <th className="px-2 py-1.5 font-medium">Product</th>
                   <th className="px-2 py-1.5 text-right font-medium">Short / Excess</th>
                   <th className="px-2 py-1.5 font-medium">Submitted (IST)</th>
-                  <th className="px-2 py-1.5 font-medium">Status</th>
+                  <th className="px-2 py-1.5 text-center font-medium">Cash verified</th>
                   <th className="px-2 py-1.5"></th>
                 </tr>
               </thead>
@@ -55,6 +167,7 @@ export default async function AdminDashboard() {
                         {e.businessDate.toLocaleDateString("en-IN", {
                           day: "2-digit",
                           month: "short",
+                          timeZone: "UTC",
                         })}
                       </td>
                       <td className="px-2 py-1.5">
@@ -77,8 +190,19 @@ export default async function AdminDashboard() {
                       <td className="px-2 py-1.5 whitespace-nowrap text-xs text-muted">
                         {istDateTimeShort(e.submittedAt)}
                       </td>
-                      <td className="px-2 py-1.5 text-muted">
-                        {e.status === "VERIFIED" ? "Verified" : "Submitted"}
+                      <td className="px-2 py-1.5 text-center">
+                        {e.status === "VERIFIED" ? (
+                          <span
+                            title="Cash verified"
+                            className="font-bold text-emerald-600 dark:text-emerald-400"
+                          >
+                            ✓
+                          </span>
+                        ) : (
+                          <span title="Not yet verified" className="text-faint">
+                            —
+                          </span>
+                        )}
                       </td>
                       <td className="px-2 py-1.5 text-right">
                         <Link
