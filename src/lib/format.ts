@@ -33,6 +33,29 @@ export function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Today's business date in IST as YYYY-MM-DD (server runs on UTC). */
+export function istToday(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+}
+
+/** UTC [start, end) bounds for a YYYY-MM-DD business day (businessDate is UTC-midnight aligned). */
+export function dayBoundsUTC(date: string): { start: Date; end: Date } {
+  const start = new Date(date + "T00:00:00.000Z");
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 1);
+  return { start, end };
+}
+
+/** "2026-06-27" -> "27 Jun 2026". */
+export function dayLabel(date: string): string {
+  return new Date(date + "T00:00:00.000Z").toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
 /** Date + time in IST, e.g. "27 Jun 2026, 6:30 pm". (Server runs on UTC.) */
 export function istDateTime(d: Date): string {
   return d.toLocaleString("en-IN", {
