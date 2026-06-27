@@ -92,23 +92,13 @@ export default async function ExpensesPage({
         title="Expense buckets"
         endpoint="/api/expense-buckets"
         noun="bucket"
-        flagField="isSalaryAdvance"
-        flagLabel="Salary advance?"
         items={buckets.map((b) => ({
           id: b.id,
           name: b.name,
           active: b.active,
           count: b._count.expenseLines,
-          flag: b.isSalaryAdvance,
         }))}
       />
-      <p className="-mt-2 px-1 text-xs text-muted">
-        Tip: mark a bucket as <strong>Salary advance</strong> for draws staff take from the
-        collection — they still balance the day, but are netted out of pay on the Salary page
-        (credited to whoever recorded the line). Name a bucket like{" "}
-        <strong>&ldquo;Ravi salary&rdquo;</strong> to instead credit the draw to that person
-        (useful when one person records another&apos;s salary).
-      </p>
 
       <DayFilter date={date} today={today} />
 

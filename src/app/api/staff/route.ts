@@ -9,10 +9,6 @@ const createSchema = z.object({
   username: z.string().trim().toLowerCase().min(1),
   password: z.string().min(4),
   role: z.enum(["EMPLOYEE", "ADMIN"]).default("EMPLOYEE"),
-  payType: z.enum(["MONTHLY", "PER_SHIFT"]).default("PER_SHIFT"),
-  shiftRate: z.coerce.number().min(0).default(0),
-  monthlySalary: z.coerce.number().min(0).default(0),
-  extraPay: z.coerce.number().min(0).default(0),
   phone: z.string().trim().optional(),
 });
 

@@ -30,15 +30,11 @@ async function main() {
       name: "Rajesh Kumar",
       username: "rajesh",
       role: "EMPLOYEE",
-      payType: "MONTHLY",
-      monthlySalary: 15000,
     },
     {
       name: "Suresh Babu",
       username: "suresh",
       role: "EMPLOYEE",
-      payType: "PER_SHIFT",
-      shiftRate: 450,
     },
   ];
 

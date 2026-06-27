@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/db";
-import { toNum } from "@/lib/format";
 import StaffManager, { type Staff } from "@/components/StaffManager";
 
 export default async function StaffPage() {
@@ -11,10 +10,6 @@ export default async function StaffPage() {
     name: u.name,
     username: u.username,
     role: u.role,
-    payType: u.payType,
-    shiftRate: toNum(u.shiftRate),
-    monthlySalary: toNum(u.monthlySalary),
-    extraPay: toNum(u.extraPay),
     phone: u.phone,
     active: u.active,
   }));

@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/db";
 import { crisStatus } from "@/lib/crisCreds";
 import { toNum, isoDate } from "@/lib/format";
-import CrisCredentialsForm from "@/components/CrisCredentialsForm";
 import CrisReportUpload from "@/components/CrisReportUpload";
 import CrisFetchForm from "@/components/CrisFetchForm";
 import CrisCompare from "@/components/CrisCompare";
@@ -24,10 +23,7 @@ export default async function CrisPage({
   const month = sp.month ?? isoDate(new Date()).slice(0, 7);
   const { start, end } = monthBounds(month);
 
-  const { configured, updatedAt } = await crisStatus();
-  const updatedLabel = updatedAt
-    ? updatedAt.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
-    : null;
+  const { configured } = await crisStatus();
 
   const [crisRows, entries, crisAgg, bankAgg, entryAgg] = await Promise.all([
     prisma.crisDaily.findMany({ where: { businessDate: { gte: start, lt: end } } }),
@@ -87,7 +83,6 @@ export default async function CrisPage({
 
   return (
     <>
-      <CrisCredentialsForm configured={configured} updatedLabel={updatedLabel} />
       <CrisFetchForm
         configured={configured}
         defaultFrom={fetchFrom}

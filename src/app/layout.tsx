@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Parakkan Petroleum — Daily Collection",
-  description: "HPCL outlet daily collection, reconciliation & salary",
+  description: "HPCL outlet daily collection & reconciliation",
 };
 
 // Sets the theme class before paint to avoid a flash of the wrong theme.

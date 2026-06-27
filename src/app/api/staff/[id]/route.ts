@@ -9,10 +9,6 @@ const updateSchema = z.object({
   username: z.string().trim().toLowerCase().min(1).optional(),
   password: z.string().min(4).optional(),
   role: z.enum(["EMPLOYEE", "ADMIN"]).optional(),
-  payType: z.enum(["MONTHLY", "PER_SHIFT"]).optional(),
-  shiftRate: z.coerce.number().min(0).optional(),
-  monthlySalary: z.coerce.number().min(0).optional(),
-  extraPay: z.coerce.number().min(0).optional(),
   phone: z.string().trim().optional(),
   active: z.boolean().optional(),
 });

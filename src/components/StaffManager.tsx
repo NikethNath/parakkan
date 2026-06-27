@@ -2,17 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { inr } from "@/lib/format";
 
 export type Staff = {
   id: number;
   name: string;
   username: string;
   role: "EMPLOYEE" | "ADMIN";
-  payType: "MONTHLY" | "PER_SHIFT";
-  shiftRate: number;
-  monthlySalary: number;
-  extraPay: number;
   phone: string | null;
   active: boolean;
 };
@@ -22,10 +17,6 @@ type FormState = {
   username: string;
   password: string;
   role: "EMPLOYEE" | "ADMIN";
-  payType: "MONTHLY" | "PER_SHIFT";
-  shiftRate: string;
-  monthlySalary: string;
-  extraPay: string;
   phone: string;
 };
 
@@ -34,10 +25,6 @@ const blank: FormState = {
   username: "",
   password: "",
   role: "EMPLOYEE",
-  payType: "PER_SHIFT",
-  shiftRate: "",
-  monthlySalary: "",
-  extraPay: "",
   phone: "",
 };
 
@@ -61,10 +48,6 @@ export default function StaffManager({ initialStaff }: { initialStaff: Staff[] }
       username: s.username,
       password: "",
       role: s.role,
-      payType: s.payType,
-      shiftRate: String(s.shiftRate || ""),
-      monthlySalary: String(s.monthlySalary || ""),
-      extraPay: String(s.extraPay || ""),
       phone: s.phone ?? "",
     });
     setEditing(s.id);
@@ -83,10 +66,6 @@ export default function StaffManager({ initialStaff }: { initialStaff: Staff[] }
       name: form.name,
       username: form.username,
       role: form.role,
-      payType: form.payType,
-      shiftRate: form.shiftRate || 0,
-      monthlySalary: form.monthlySalary || 0,
-      extraPay: form.extraPay || 0,
       phone: form.phone,
     };
     if (form.password) payload.password = form.password;
@@ -175,42 +154,6 @@ export default function StaffManager({ initialStaff }: { initialStaff: Staff[] }
                 <option value="ADMIN">Admin</option>
               </select>
             </Field>
-            <Field label="Pay type">
-              <select value={form.payType} onChange={(e) => set("payType", e.target.value)} className={inp}>
-                <option value="PER_SHIFT">Per shift</option>
-                <option value="MONTHLY">Monthly</option>
-              </select>
-            </Field>
-            {form.payType === "PER_SHIFT" ? (
-              <Field label="Wage per shift (₹)">
-                <input
-                  type="number"
-                  value={form.shiftRate}
-                  onChange={(e) => set("shiftRate", e.target.value)}
-                  className={inp}
-                  placeholder="0"
-                />
-              </Field>
-            ) : (
-              <Field label="Monthly salary (₹)">
-                <input
-                  type="number"
-                  value={form.monthlySalary}
-                  onChange={(e) => set("monthlySalary", e.target.value)}
-                  className={inp}
-                  placeholder="0"
-                />
-              </Field>
-            )}
-            <Field label="Extra fixed pay / month (₹)">
-              <input
-                type="number"
-                value={form.extraPay}
-                onChange={(e) => set("extraPay", e.target.value)}
-                className={inp}
-                placeholder="0"
-              />
-            </Field>
           </div>
           {error && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
           <div className="mt-4 flex gap-2">
@@ -242,7 +185,6 @@ export default function StaffManager({ initialStaff }: { initialStaff: Staff[] }
                 <th className="px-2 py-1.5 font-medium">Name</th>
                 <th className="px-2 py-1.5 font-medium">Username</th>
                 <th className="px-2 py-1.5 font-medium">Role</th>
-                <th className="px-2 py-1.5 font-medium">Pay</th>
                 <th className="px-2 py-1.5 font-medium">Status</th>
                 <th className="px-2 py-1.5"></th>
               </tr>
@@ -256,17 +198,6 @@ export default function StaffManager({ initialStaff }: { initialStaff: Staff[] }
                   <td className="px-2 py-1.5 font-medium text-foreground">{s.name}</td>
                   <td className="px-2 py-1.5 text-muted">{s.username}</td>
                   <td className="px-2 py-1.5">{s.role === "ADMIN" ? "Admin" : "Employee"}</td>
-                  <td className="px-2 py-1.5 text-muted">
-                    {s.payType === "PER_SHIFT"
-                      ? `${inr(s.shiftRate)}/shift`
-                      : `${inr(s.monthlySalary)}/mo`}
-                    {s.extraPay > 0 && (
-                      <span className="text-xs text-faint">
-                        {" "}
-                        +{inr(s.extraPay)} extra
-                      </span>
-                    )}
-                  </td>
                   <td className="px-2 py-1.5">
                     {s.active ? (
                       <span className="text-emerald-600 dark:text-emerald-400">Active</span>

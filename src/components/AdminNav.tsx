@@ -12,7 +12,6 @@ const links = [
   { href: "/admin/expenses", label: "Expenses" },
   { href: "/admin/oil", label: "Oil" },
   { href: "/admin/reconcile", label: "Reconcile" },
-  { href: "/admin/salary", label: "Salary" },
   { href: "/admin/staff", label: "Staff" },
   { href: "/admin/cris", label: "CRIS" },
 ];

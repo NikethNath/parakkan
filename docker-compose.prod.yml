@@ -36,6 +36,33 @@ services:
     expose:
       - "3000"
 
+  # Nightly CRIS auto-fetch. busybox crond fires cris-fetch.sh at 03:00 IST,
+  # which POSTs the token-protected /api/cris/cron-fetch endpoint on the app
+  # (reached directly over the internal network). Logs to `docker compose logs
+  # cron`. No-ops with a logged warning if CRON_SECRET is unset.
+  cron:
+    image: alpine:3.20
+    restart: unless-stopped
+    depends_on:
+      - app
+    environment:
+      TZ: Asia/Kolkata
+      CRON_SECRET: ${CRON_SECRET}
+      CRIS_CRON_URL: http://app:3000/api/cris/cron-fetch
+      CRIS_LOG: /proc/1/fd/1
+    volumes:
+      - ./scripts:/scripts:ro
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        apk add --no-cache curl tzdata >/dev/null
+        mkdir -p /etc/crontabs
+        printf '0 3 * * * /scripts/cris-fetch.sh\n' > /etc/crontabs/root
+        echo "[cron] CRIS auto-fetch scheduled for 03:00 Asia/Kolkata"
+        exec crond -f -l 8 -c /etc/crontabs
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped

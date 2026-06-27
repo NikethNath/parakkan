@@ -74,7 +74,7 @@ export default async function EditAttendancePage({
         </h2>
         <p className="mb-3 text-xs text-muted">
           Set each person&apos;s status for this day (pick another day above). Changes save
-          instantly and feed the month totals + salary.
+          instantly and feed the month totals.
         </p>
         <AttendanceDay date={date} rows={dayRowsForClient} />
       </section>
