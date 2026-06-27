@@ -133,6 +133,18 @@ model OilLine {
   qty       Decimal    @db.Decimal(12, 3)
   unitPrice Decimal    @db.Decimal(12, 2)
   amount    Decimal    @db.Decimal(12, 2)
+  bucket    OilBucket? @relation(fields: [bucketId], references: [id], onDelete: SetNull)
+  bucketId  Int?
+}
+
+// Admin-managed oil categories (e.g. 2T oil, Engine oil, Coolant). Staff type a
+// free-text oil name per line; the admin classifies each into one.
+model OilBucket {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  oilLines  OilLine[]
 }
 
 model ExpenseLine {

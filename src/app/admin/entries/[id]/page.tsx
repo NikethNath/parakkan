@@ -137,8 +137,9 @@ export default async function AdminEntryDetail({
       )}
 
       <p className="mt-3 px-1 text-xs text-muted">
-        Editing recomputes all totals and records each change below. Current
-        short/excess: {inr(toNum(entry.shortExcess))}
+        Opens in view-only mode — click <strong>Edit</strong> to change values. Edits
+        recompute all totals and are logged below. Current short/excess:{" "}
+        {inr(toNum(entry.shortExcess))}
       </p>
 
       <DailyEntryForm
@@ -147,6 +148,7 @@ export default async function AdminEntryDetail({
         initial={initial}
         redirectTo="/admin"
         admin
+        startLocked
       />
 
       <DeleteEntryButton

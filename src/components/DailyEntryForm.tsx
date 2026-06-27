@@ -78,12 +78,14 @@ export default function DailyEntryForm({
   initial,
   redirectTo = "/employee",
   admin = false,
+  startLocked = false,
 }: {
   mode?: "create" | "edit";
   entryId?: number;
   initial?: DailyEntryInitial;
   redirectTo?: string;
   admin?: boolean;
+  startLocked?: boolean;
 } = {}) {
   const router = useRouter();
   const [form, setForm] = useState<FormState>(() => ({
@@ -97,9 +99,22 @@ export default function DailyEntryForm({
   const [error, setError] = useState<string | null>(null);
   const [issues, setIssues] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  // Admin entries open read-only so a value can't be nudged by accident; the
+  // Edit button unlocks the form.
+  const [locked, setLocked] = useState(startLocked);
 
   const set = (k: keyof FormState, v: string) =>
     setForm((f) => ({ ...f, [k]: v }));
+
+  function resetToInitial() {
+    setForm({ ...emptyForm(), ...(initial?.form ?? {}) });
+    setOil(initial?.oil ?? []);
+    setExpenses(initial?.expenses ?? []);
+    setCredit(initial?.credit ?? []);
+    setVerified(initial?.verified ?? false);
+    setError(null);
+    setIssues([]);
+  }
 
   const computed = useMemo(
     () =>
@@ -116,6 +131,7 @@ export default function DailyEntryForm({
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (locked) return; // safety — Save is hidden while locked
     setSaving(true);
     setError(null);
     setIssues([]);
@@ -160,6 +176,45 @@ export default function DailyEntryForm({
 
   return (
     <form onSubmit={onSubmit} className="mx-auto max-w-2xl space-y-4 p-4 pb-40">
+      {mode === "edit" && (
+        <div
+          className={
+            "flex flex-wrap items-center justify-between gap-2 rounded-xl p-3 text-sm ring-1 " +
+            (locked
+              ? "bg-surface text-muted ring-border"
+              : "bg-amber-50 text-amber-800 ring-amber-300 dark:bg-amber-500/10 dark:text-amber-200 dark:ring-amber-500/30")
+          }
+        >
+          {locked ? (
+            <>
+              <span>🔒 View only — values are locked so nothing changes by accident.</span>
+              <button
+                type="button"
+                onClick={() => setLocked(false)}
+                className="rounded-lg bg-accent px-4 py-1.5 font-semibold text-white hover:bg-accent-strong"
+              >
+                Edit
+              </button>
+            </>
+          ) : (
+            <>
+              <span>✏️ Editing — make your changes, then “Save changes” below.</span>
+              <button
+                type="button"
+                onClick={() => {
+                  resetToInitial();
+                  setLocked(true);
+                }}
+                className="rounded-lg border border-border px-4 py-1.5 font-medium text-foreground hover:bg-surface-2"
+              >
+                Cancel
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      <fieldset disabled={locked} className="m-0 min-w-0 space-y-4 border-0 p-0">
       {/* Shift / product / date / rate */}
       <Section title="Shift details">
         <div className="grid grid-cols-2 gap-3">
@@ -453,6 +508,7 @@ export default function DailyEntryForm({
           </>
         )}
       />
+      </fieldset>
 
       {error && (
         <div className="rounded-lg bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300">
@@ -490,28 +546,40 @@ export default function DailyEntryForm({
             </p>
           </div>
           <div className="flex items-center gap-3">
-            {admin && (
-              <label className="flex items-center gap-1.5 text-sm text-muted">
-                <input
-                  type="checkbox"
-                  checked={verified}
-                  onChange={(e) => setVerified(e.target.checked)}
-                  className="h-4 w-4"
-                />
-                Verified
-              </label>
+            {locked ? (
+              <button
+                type="button"
+                onClick={() => setLocked(false)}
+                className="rounded-lg bg-accent px-5 py-2.5 font-semibold text-white transition hover:bg-accent-strong"
+              >
+                Edit
+              </button>
+            ) : (
+              <>
+                {admin && (
+                  <label className="flex items-center gap-1.5 text-sm text-muted">
+                    <input
+                      type="checkbox"
+                      checked={verified}
+                      onChange={(e) => setVerified(e.target.checked)}
+                      className="h-4 w-4"
+                    />
+                    Verified
+                  </label>
+                )}
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="rounded-lg bg-accent px-5 py-2.5 font-semibold text-white transition hover:bg-accent-strong disabled:opacity-60"
+                >
+                  {saving
+                    ? "Saving…"
+                    : mode === "edit"
+                      ? "Save changes"
+                      : "Submit sheet"}
+                </button>
+              </>
             )}
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-lg bg-accent px-5 py-2.5 font-semibold text-white transition hover:bg-accent-strong disabled:opacity-60"
-            >
-              {saving
-                ? "Saving…"
-                : mode === "edit"
-                  ? "Save changes"
-                  : "Submit sheet"}
-            </button>
           </div>
         </div>
       </div>
