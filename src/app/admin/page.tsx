@@ -12,29 +12,32 @@ export default async function SubmissionsPage({
 }) {
   const sp = await searchParams;
   const today = istToday();
-  const toRaw = isDate(sp.to) ? sp.to! : today;
-  const fromRaw = isDate(sp.from) ? sp.from! : today.slice(0, 8) + "01"; // 1st of this month
 
-  // Both inclusive; tolerate a reversed range by ordering the bounds.
-  const lo = fromRaw <= toRaw ? fromRaw : toRaw;
-  const hi = fromRaw <= toRaw ? toRaw : fromRaw;
-  const start = new Date(lo + "T00:00:00.000Z");
-  const endExclusive = dayBoundsUTC(hi).end;
+  // The submissions list only appears once a date range is chosen; by default
+  // the page shows just the "needs verification" alert below.
+  const hasRange = isDate(sp.from) && isDate(sp.to);
+  const fromRaw = isDate(sp.from) ? sp.from! : "";
+  const toRaw = isDate(sp.to) ? sp.to! : "";
+  const lo = !hasRange ? "" : fromRaw <= toRaw ? fromRaw : toRaw;
+  const hi = !hasRange ? "" : fromRaw <= toRaw ? toRaw : fromRaw;
 
-  const [entries, unverified] = await Promise.all([
-    prisma.dailyEntry.findMany({
-      where: { businessDate: { gte: start, lt: endExclusive } },
-      orderBy: [{ businessDate: "desc" }, { id: "desc" }],
-      include: { employee: { select: { name: true } } },
-    }),
-    // Global "needs verification" alert — independent of the date range above.
-    prisma.dailyEntry.findMany({
-      where: { status: { not: "VERIFIED" } },
-      orderBy: [{ businessDate: "desc" }, { id: "desc" }],
-      take: 200,
-      include: { employee: { select: { name: true } } },
-    }),
-  ]);
+  // Global "needs verification" alert — independent of the date range.
+  const unverified = await prisma.dailyEntry.findMany({
+    where: { status: { not: "VERIFIED" } },
+    orderBy: [{ businessDate: "desc" }, { id: "desc" }],
+    take: 200,
+    include: { employee: { select: { name: true } } },
+  });
+
+  const entries = hasRange
+    ? await prisma.dailyEntry.findMany({
+        where: {
+          businessDate: { gte: new Date(lo + "T00:00:00.000Z"), lt: dayBoundsUTC(hi).end },
+        },
+        orderBy: [{ businessDate: "desc" }, { id: "desc" }],
+        include: { employee: { select: { name: true } } },
+      })
+    : [];
 
   const totalShort = entries
     .filter((e) => toNum(e.shortExcess) < 0)
@@ -102,7 +105,7 @@ export default async function SubmissionsPage({
           <input
             type="date"
             name="from"
-            defaultValue={lo}
+            defaultValue={fromRaw}
             max={today}
             className="rounded-lg border border-border px-3 py-1.5"
           />
@@ -112,7 +115,7 @@ export default async function SubmissionsPage({
           <input
             type="date"
             name="to"
-            defaultValue={hi}
+            defaultValue={toRaw}
             max={today}
             className="rounded-lg border border-border px-3 py-1.5"
           />
@@ -121,29 +124,35 @@ export default async function SubmissionsPage({
           type="submit"
           className="rounded-lg bg-accent px-4 py-1.5 font-medium text-white hover:bg-accent-strong"
         >
-          Apply
+          Show
         </button>
       </form>
 
-      <div className="grid grid-cols-2 gap-3">
-        <Card label="Total excess (period)" value={inr(totalExcess)} tone="emerald" />
-        <Card label="Total short (period)" value={inr(Math.abs(totalShort))} tone="red" />
-      </div>
+      {!hasRange ? (
+        <p className="px-1 text-sm text-muted">
+          Pick a start and end date above to list submissions for that period.
+        </p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <Card label="Total excess (period)" value={inr(totalExcess)} tone="emerald" />
+            <Card label="Total short (period)" value={inr(Math.abs(totalShort))} tone="red" />
+          </div>
 
-      <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
-        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
-            Submissions · {dayLabel(lo)} – {dayLabel(hi)}
-          </h2>
-          <p className="text-xs text-muted">
-            {entries.length} submission{entries.length === 1 ? "" : "s"} · {verifiedCount} cash
-            verified
-          </p>
-        </div>
-        {entries.length === 0 ? (
-          <p className="py-6 text-center text-sm text-faint">No submissions in this period.</p>
-        ) : (
-          <div className="overflow-x-auto">
+          <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
+            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
+                Submissions · {dayLabel(lo)} – {dayLabel(hi)}
+              </h2>
+              <p className="text-xs text-muted">
+                {entries.length} submission{entries.length === 1 ? "" : "s"} · {verifiedCount} cash
+                verified
+              </p>
+            </div>
+            {entries.length === 0 ? (
+              <p className="py-6 text-center text-sm text-faint">No submissions in this period.</p>
+            ) : (
+              <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-left text-muted">
                 <tr>
@@ -218,8 +227,10 @@ export default async function SubmissionsPage({
               </tbody>
             </table>
           </div>
-        )}
-      </section>
+            )}
+          </section>
+        </>
+      )}
     </>
   );
 }
