@@ -50,7 +50,10 @@ export default async function ExpensesPage() {
       />
       <p className="-mt-2 px-1 text-xs text-muted">
         Tip: mark a bucket as <strong>Salary advance</strong> for draws staff take from the
-        collection. Those still balance the day, but are netted out of pay on the Salary page.
+        collection — they still balance the day, but are netted out of pay on the Salary page
+        (credited to whoever recorded the line). Name a bucket like{" "}
+        <strong>&ldquo;Ravi salary&rdquo;</strong> to instead credit the draw to that person
+        (useful when one person records another&apos;s salary).
       </p>
 
       <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">

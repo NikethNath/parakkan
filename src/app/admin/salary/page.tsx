@@ -29,14 +29,24 @@ export default async function SalaryPage({
       where: { businessDate: { gte: start, lt: end } },
       select: { employeeId: true, shortExcess: true },
     }),
-    // Salary draws staff took from the collection (expense lines in a bucket
-    // flagged as "salary advance"), attributed to whoever's sheet they're on.
+    // Salary draws staff took from the collection: expense lines in a bucket
+    // flagged "salary advance" (credited to whoever's sheet it's on), OR in a
+    // bucket named "<name> salary" (credited to that named person).
     prisma.expenseLine.findMany({
       where: {
-        bucket: { isSalaryAdvance: true },
         entry: { businessDate: { gte: start, lt: end } },
+        bucket: {
+          OR: [
+            { isSalaryAdvance: true },
+            { name: { endsWith: "salary", mode: "insensitive" } },
+          ],
+        },
       },
-      select: { amount: true, entry: { select: { employeeId: true } } },
+      select: {
+        amount: true,
+        bucket: { select: { name: true, isSalaryAdvance: true } },
+        entry: { select: { employeeId: true } },
+      },
     }),
     // Payments / advances the admin recorded directly for this month.
     prisma.salaryPayment.findMany({
@@ -54,9 +64,22 @@ export default async function SalaryPage({
   for (const e of entries)
     seByEmp.set(e.employeeId, (seByEmp.get(e.employeeId) ?? 0) + toNum(e.shortExcess));
 
+  // Map "<name> salary" buckets to the named employee (case-insensitive).
+  const empByName = new Map<string, number>();
+  for (const e of employees) empByName.set(e.name.trim().toLowerCase(), e.id);
+
   const advByEmp = new Map<number, number>();
-  for (const l of advanceLines)
-    advByEmp.set(l.entry.employeeId, (advByEmp.get(l.entry.employeeId) ?? 0) + toNum(l.amount));
+  for (const l of advanceLines) {
+    if (!l.bucket) continue;
+    const named = l.bucket.name.trim().match(/^(.+?)\s+salary$/i);
+    if (!l.bucket.isSalaryAdvance && !named) continue; // not actually a salary draw
+    let target = l.entry.employeeId; // default: whoever recorded the line
+    if (named) {
+      const id = empByName.get(named[1].trim().toLowerCase());
+      if (id) target = id; // credit the named person instead
+    }
+    advByEmp.set(target, (advByEmp.get(target) ?? 0) + toNum(l.amount));
+  }
 
   const payByEmp = new Map<number, Payment[]>();
   for (const p of paymentRows) {
