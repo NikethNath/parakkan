@@ -4,8 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const links = [
-  { href: "/admin", label: "Dashboard" },
-  { href: "/admin/attendance", label: "Attendance" },
+  { href: "/admin", label: "Dashboard", exact: true },
+  { href: "/admin/attendance", label: "Attendance", exact: true },
+  { href: "/admin/attendance/edit", label: "Edit Att." },
   { href: "/admin/credit", label: "Credit" },
   { href: "/admin/expenses", label: "Expenses" },
   { href: "/admin/oil", label: "Oil" },
@@ -21,8 +22,7 @@ export default function AdminNav() {
     <nav className="border-b border-border bg-surface print:hidden">
       <div className="no-scrollbar mx-auto flex max-w-4xl gap-1 overflow-x-auto px-4">
         {links.map((l) => {
-          const active =
-            l.href === "/admin" ? path === "/admin" : path.startsWith(l.href);
+          const active = l.exact ? path === l.href : path.startsWith(l.href);
           return (
             <Link
               key={l.href}
