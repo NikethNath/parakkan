@@ -8,7 +8,7 @@ function monthBounds(month: string) {
   return { start: new Date(Date.UTC(y, m - 1, 1)), end: new Date(Date.UTC(y, m, 1)) };
 }
 
-const TOLERANCE = 1; // ₹
+const TOLERANCE = 6; // ₹ — matches TOL in BankReconcile
 
 type Row = { date: string; bank: number; entered: number };
 

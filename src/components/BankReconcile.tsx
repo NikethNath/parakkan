@@ -4,7 +4,7 @@ import { useState } from "react";
 import { inr } from "@/lib/format";
 
 type Row = { date: string; bank: number; entered: number };
-const TOL = 1;
+const TOL = 6; // ₹ — only flag GPay/POS days off by more than this
 
 export default function BankReconcile({ gpay, pos }: { gpay: Row[]; pos: Row[] }) {
   const [channel, setChannel] = useState<"GPAY" | "POS">("GPAY");
