@@ -12,6 +12,7 @@ const links = [
   { href: "/admin/expenses", label: "Expenses" },
   { href: "/admin/oil", label: "Oil" },
   { href: "/admin/reconcile", label: "Reconcile" },
+  { href: "/admin/dip", label: "Dip chart" },
   { href: "/admin/staff", label: "Staff" },
   { href: "/admin/cris", label: "CRIS" },
 ];
