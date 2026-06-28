@@ -13,6 +13,7 @@ const links = [
   { href: "/admin/oil", label: "Oil" },
   { href: "/admin/reconcile", label: "Reconcile" },
   { href: "/admin/dip", label: "Dip chart" },
+  { href: "/admin/astm", label: "ASTM 3B" },
   { href: "/admin/staff", label: "Staff" },
   { href: "/admin/cris", label: "CRIS" },
 ];
