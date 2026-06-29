@@ -70,6 +70,20 @@ export default async function EmployeeSheetDetail({
           </div>
         </header>
 
+        {entry.status === "VERIFIED" ? (
+          <div className="rounded-xl bg-surface-2 p-3 text-center text-sm text-muted ring-1 ring-border">
+            🔒 Verified by the admin — this sheet is locked. Ask the admin if something
+            needs fixing.
+          </div>
+        ) : (
+          <Link
+            href={`/employee/sheet/${entry.id}/edit`}
+            className="block rounded-xl bg-accent px-4 py-3 text-center font-semibold text-white shadow-soft transition hover:bg-accent-strong"
+          >
+            ✏️ Edit this sheet
+          </Link>
+        )}
+
         {/* Transparency: any admin edits to this sheet */}
         {entry.audits.length > 0 ? (
           <section className="rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 p-4">

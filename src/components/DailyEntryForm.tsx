@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FocusEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   computeEntry,
@@ -104,6 +104,13 @@ export default function DailyEntryForm({
   // Admin entries open read-only so a value can't be nudged by accident; the
   // Edit button unlocks the form.
   const [locked, setLocked] = useState(startLocked);
+  // Employees get a "review before submit" confirmation step (catches accidental
+  // and incomplete submits); admins save directly.
+  const needsConfirm = !admin;
+  const [confirming, setConfirming] = useState(false);
+  // Employees may fix the figures on an existing sheet but not move it to another
+  // day (cross-month payroll impact). The server enforces this too.
+  const lockDate = mode === "edit" && !admin;
 
   // Keep the footer "Verified" box in sync if the cash-verified tick on the
   // detail page is toggled (router.refresh passes a new initial.verified), so a
@@ -137,10 +144,46 @@ export default function DailyEntryForm({
   );
 
   const label = shortExcessLabel(computed.shortExcess);
+  const dateLabel = form.businessDate
+    ? new Date(`${form.businessDate}T00:00:00.000Z`).toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        timeZone: "UTC",
+      })
+    : "—";
+  const shiftLabel = form.shift === "MORNING" ? "Morning" : "Evening";
 
-  async function onSubmit(e: FormEvent) {
+  function onFormSubmit(e: FormEvent) {
     e.preventDefault();
     if (locked) return; // safety — Save is hidden while locked
+    if (needsConfirm) {
+      setConfirming(true); // show the review step instead of submitting outright
+      return;
+    }
+    void doSubmit();
+  }
+
+  // Mobile: when a field is focused the on-screen keyboard shrinks the viewport
+  // and can hide the field (or it ends up under the sticky total bar). Once the
+  // keyboard has had a moment to open, pull the focused field to the middle.
+  function handleFieldFocus(e: FocusEvent<HTMLFormElement>) {
+    if (typeof window === "undefined") return;
+    if (!window.matchMedia("(pointer: coarse)").matches) return;
+    const el = e.target as HTMLElement;
+    if (
+      el instanceof HTMLInputElement ||
+      el instanceof HTMLSelectElement ||
+      el instanceof HTMLTextAreaElement
+    ) {
+      window.setTimeout(
+        () => el.scrollIntoView({ block: "center", behavior: "smooth" }),
+        250,
+      );
+    }
+  }
+
+  async function doSubmit() {
     setSaving(true);
     setError(null);
     setIssues([]);
@@ -168,6 +211,7 @@ export default function DailyEntryForm({
       );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        setConfirming(false); // close the dialog so the error below is visible
         setError(data.error ?? "Could not save");
         if (Array.isArray(data.issues)) {
           setIssues(data.issues.map((i: { path: string; message: string }) => `${i.path}: ${i.message}`));
@@ -177,6 +221,7 @@ export default function DailyEntryForm({
       router.push(redirectTo);
       router.refresh();
     } catch {
+      setConfirming(false);
       setError("Network error — please try again");
     } finally {
       setSaving(false);
@@ -184,7 +229,11 @@ export default function DailyEntryForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="mx-auto max-w-2xl space-y-4 p-4 pb-40">
+    <form
+      onSubmit={onFormSubmit}
+      onFocus={handleFieldFocus}
+      className="mx-auto max-w-2xl space-y-4 p-4 pb-40"
+    >
       {mode === "edit" && (
         <div
           className={
@@ -232,9 +281,15 @@ export default function DailyEntryForm({
               type="date"
               value={form.businessDate}
               onChange={(e) => set("businessDate", e.target.value)}
-              className={inputCls}
+              className={inputCls + (lockDate ? " bg-surface-2 text-muted" : "")}
               required
+              disabled={lockDate}
             />
+            {lockDate && (
+              <span className="mt-1 block text-xs text-faint">
+                🔒 Date is fixed — ask the admin to change it.
+              </span>
+            )}
           </Field>
           <Field label="Shift">
             <select
@@ -594,6 +649,72 @@ export default function DailyEntryForm({
           </div>
         </div>
       </div>
+
+      {confirming && (
+        <div
+          className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="w-full max-w-md rounded-2xl bg-surface p-5 shadow-soft ring-1 ring-border">
+            <h3 className="text-base font-bold text-foreground">
+              {mode === "edit" ? "Save these changes?" : "Check before you submit"}
+            </h3>
+            <p className="mt-1 text-sm text-muted">
+              {dateLabel} · {shiftLabel} · {form.product}
+            </p>
+            <div className="mt-3 space-y-1.5 rounded-xl bg-surface-2 p-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted">Collected</span>
+                <span className="tabular-nums text-foreground">{inr(computed.collected)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted">Fuel expected</span>
+                <span className="tabular-nums text-foreground">{inr(computed.fuelExpected)}</span>
+              </div>
+              <div className="mt-1 flex items-baseline justify-between border-t border-border pt-2">
+                <span className="font-semibold text-foreground">
+                  {label === "BALANCED" ? "Balanced" : label === "SHORT" ? "Short" : "Excess"}
+                </span>
+                <span
+                  className={
+                    "text-lg font-bold tabular-nums " +
+                    (label === "SHORT"
+                      ? "text-red-600 dark:text-red-400"
+                      : label === "EXCESS"
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-foreground")
+                  }
+                >
+                  {label === "BALANCED" ? "—" : inr(Math.abs(computed.shortExcess))}
+                </span>
+              </div>
+            </div>
+            <p className="mt-3 text-xs text-muted">
+              Double-check your meter readings and cash count. Once the admin verifies this
+              sheet you won&apos;t be able to edit it.
+            </p>
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirming(false)}
+                disabled={saving}
+                className="flex-1 rounded-lg border border-border px-4 py-2.5 font-medium text-foreground hover:bg-surface-2 disabled:opacity-60"
+              >
+                Go back
+              </button>
+              <button
+                type="button"
+                onClick={() => void doSubmit()}
+                disabled={saving}
+                className="flex-1 rounded-lg bg-accent px-4 py-2.5 font-semibold text-white transition hover:bg-accent-strong disabled:opacity-60"
+              >
+                {saving ? "Saving…" : mode === "edit" ? "Confirm & save" : "Confirm & submit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 }

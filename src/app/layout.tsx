@@ -1,9 +1,17 @@
 import "./globals.css";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 
 export const metadata: Metadata = {
   title: "Parakkan Petroleum — Daily Collection",
   description: "HPCL outlet daily collection & reconciliation",
+};
+
+// `resizes-content` makes the on-screen keyboard shrink the layout viewport so a
+// focused field can be scrolled clear of the keyboard (see DailyEntryForm).
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  interactiveWidget: "resizes-content",
 };
 
 // Sets the theme class before paint to avoid a flash of the wrong theme.

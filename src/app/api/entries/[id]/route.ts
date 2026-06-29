@@ -92,8 +92,8 @@ export async function PATCH(
   ctx: { params: Promise<{ id: string }> },
 ) {
   const user = await getSessionUser();
-  if (!user || user.role !== "ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!user) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
   const { id: idStr } = await ctx.params;
@@ -105,6 +105,25 @@ export async function PATCH(
   const existing = await prisma.dailyEntry.findUnique({ where: { id } });
   if (!existing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  // Admins can edit any sheet (logged in the audit trail). An employee may fix
+  // their OWN sheet, but only until the admin verifies it — after that it's
+  // locked to them.
+  const isAdmin = user.role === "ADMIN";
+  if (!isAdmin) {
+    if (existing.employeeId !== user.uid) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (existing.status === "VERIFIED") {
+      return NextResponse.json(
+        {
+          error:
+            "This sheet has been verified and can no longer be edited. Ask the admin to make changes.",
+        },
+        { status: 403 },
+      );
+    }
   }
 
   const body = await req.json().catch(() => null);
@@ -121,6 +140,11 @@ export async function PATCH(
   const input = entry.data;
   const c = computeEntry(input);
 
+  // Employees may correct the figures on an existing sheet but not move it to
+  // another day — the date is the one change with cross-month payroll impact, so
+  // it's pinned to whatever it already was. Admins can still re-date a sheet.
+  const businessDate = isAdmin ? meta.data.businessDate : isoDate(existing.businessDate);
+
   // --- Build the audit diff (employee-original values are preserved) ---------
   const audits: { field: string; oldValue: string; newValue: string }[] = [];
   const ex = existing as unknown as Record<string, unknown>;
@@ -134,7 +158,7 @@ export async function PATCH(
     if (oldV !== newV) audits.push({ field, oldValue: oldV, newValue: newV });
   };
 
-  cmpStr("businessDate", isoDate(existing.businessDate), meta.data.businessDate);
+  cmpStr("businessDate", isoDate(existing.businessDate), businessDate);
   cmpStr("shift", existing.shift, meta.data.shift);
   cmpStr("product", existing.product, input.product);
   for (const f of INPUT_FIELDS) cmpNum(f, ex[f], inp[f]);
@@ -145,7 +169,9 @@ export async function PATCH(
   cmpNum("fuelExpected", existing.fuelExpected, c.fuelExpected);
   cmpNum("shortExcess", existing.shortExcess, c.shortExcess);
 
-  const verify = meta.data.verify ?? existing.status === "VERIFIED";
+  // Only an admin can verify (and thereby lock) a sheet; an employee's save
+  // always leaves it SUBMITTED so it stays editable until the admin checks it.
+  const verify = isAdmin ? (meta.data.verify ?? existing.status === "VERIFIED") : false;
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -156,7 +182,7 @@ export async function PATCH(
       await tx.dailyEntry.update({
         where: { id },
         data: {
-          businessDate: toDate(meta.data.businessDate),
+          businessDate: toDate(businessDate),
           shift: meta.data.shift,
           product: input.product,
           rate: input.rate,
@@ -210,7 +236,9 @@ export async function PATCH(
         },
       });
 
-      if (audits.length > 0) {
+      // Only log admin overrides — a pre-verification self-correction by the
+      // employee isn't an "edited after the fact" event worth flagging.
+      if (isAdmin && audits.length > 0) {
         await tx.entryAudit.createMany({
           data: audits.map((a) => ({ entryId: id, changedById: user.uid, ...a })),
         });
@@ -221,14 +249,14 @@ export async function PATCH(
         where: {
           employeeId_date_shift: {
             employeeId: existing.employeeId,
-            date: toDate(meta.data.businessDate),
+            date: toDate(businessDate),
             shift: meta.data.shift,
           },
         },
         update: {},
         create: {
           employeeId: existing.employeeId,
-          date: toDate(meta.data.businessDate),
+          date: toDate(businessDate),
           shift: meta.data.shift,
           status: "PRESENT",
           source: "AUTO",
@@ -239,7 +267,7 @@ export async function PATCH(
       // auto-marked on its previous day/shift — unless another submission by
       // the same employee still covers it (e.g. MS + HSD on the same shift).
       const movedDayOrShift =
-        isoDate(existing.businessDate) !== meta.data.businessDate ||
+        isoDate(existing.businessDate) !== businessDate ||
         existing.shift !== meta.data.shift;
       if (movedDayOrShift) {
         const stillCovered = await tx.dailyEntry.count({
