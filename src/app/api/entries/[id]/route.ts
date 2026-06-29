@@ -57,18 +57,28 @@ export async function DELETE(
 
   try {
     await prisma.$transaction(async (tx) => {
-      // Drop the attendance this submission auto-marked, so a test/bogus entry
-      // doesn't leave the staff counted "present". A manual mark is left alone.
-      await tx.attendance.deleteMany({
-        where: {
-          employeeId: existing.employeeId,
-          date: existing.businessDate,
-          shift: existing.shift,
-          source: "AUTO",
-        },
-      });
       // Cascades to oil/expense/credit lines and the audit trail.
       await tx.dailyEntry.delete({ where: { id } });
+      // Drop the attendance this submission auto-marked, so a test/bogus entry
+      // doesn't leave the staff counted "present" — unless another submission by
+      // the same employee still covers that day/shift. A manual mark is left alone.
+      const stillCovered = await tx.dailyEntry.count({
+        where: {
+          employeeId: existing.employeeId,
+          businessDate: existing.businessDate,
+          shift: existing.shift,
+        },
+      });
+      if (stillCovered === 0) {
+        await tx.attendance.deleteMany({
+          where: {
+            employeeId: existing.employeeId,
+            date: existing.businessDate,
+            shift: existing.shift,
+            source: "AUTO",
+          },
+        });
+      }
     });
     return NextResponse.json({ ok: true, id });
   } catch (err) {
@@ -224,6 +234,32 @@ export async function PATCH(
           source: "AUTO",
         },
       });
+
+      // If the date or shift moved, drop the attendance this submission had
+      // auto-marked on its previous day/shift — unless another submission by
+      // the same employee still covers it (e.g. MS + HSD on the same shift).
+      const movedDayOrShift =
+        isoDate(existing.businessDate) !== meta.data.businessDate ||
+        existing.shift !== meta.data.shift;
+      if (movedDayOrShift) {
+        const stillCovered = await tx.dailyEntry.count({
+          where: {
+            employeeId: existing.employeeId,
+            businessDate: existing.businessDate,
+            shift: existing.shift,
+          },
+        });
+        if (stillCovered === 0) {
+          await tx.attendance.deleteMany({
+            where: {
+              employeeId: existing.employeeId,
+              date: existing.businessDate,
+              shift: existing.shift,
+              source: "AUTO",
+            },
+          });
+        }
+      }
     });
 
     return NextResponse.json({

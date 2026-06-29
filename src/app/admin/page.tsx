@@ -46,6 +46,7 @@ export default async function SubmissionsPage({
     .filter((e) => toNum(e.shortExcess) > 0)
     .reduce((s, e) => s + toNum(e.shortExcess), 0);
   const verifiedCount = entries.filter((e) => e.status === "VERIFIED").length;
+  const net = totalExcess + totalShort; // totalShort is ≤ 0 → net excess if > 0, net short if < 0
 
   return (
     <>
@@ -134,9 +135,14 @@ export default async function SubmissionsPage({
         </p>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <Card label="Total excess (period)" value={inr(totalExcess)} tone="emerald" />
             <Card label="Total short (period)" value={inr(Math.abs(totalShort))} tone="red" />
+            <Card
+              label={net > 0 ? "Net excess (period)" : net < 0 ? "Net short (period)" : "Net (period)"}
+              value={inr(Math.abs(net))}
+              tone={net < 0 ? "red" : "emerald"}
+            />
           </div>
 
           <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
