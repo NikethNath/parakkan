@@ -18,24 +18,27 @@ export default async function CreditPage({
 }) {
   const sp = await searchParams;
   const today = istToday();
-  // Default to this month so far; pick any start/end range above.
-  const fromRaw = isDate(sp.from) ? sp.from! : today.slice(0, 8) + "01";
-  const toRaw = isDate(sp.to) ? sp.to! : today;
-  const lo = fromRaw <= toRaw ? fromRaw : toRaw;
-  const hi = fromRaw <= toRaw ? toRaw : fromRaw;
-  const start = dayBoundsUTC(lo).start;
-  const end = dayBoundsUTC(hi).end;
+  // No default range — pick a start and end date to load the credit.
+  const hasRange = isDate(sp.from) && isDate(sp.to);
+  const fromRaw = isDate(sp.from) ? sp.from! : "";
+  const toRaw = isDate(sp.to) ? sp.to! : "";
+  const lo = !hasRange ? "" : fromRaw <= toRaw ? fromRaw : toRaw;
+  const hi = !hasRange ? "" : fromRaw <= toRaw ? toRaw : fromRaw;
 
-  const lines: CreditRow[] = await prisma.creditLine.findMany({
-    where: { entry: { businessDate: { gte: start, lt: end } } },
-    orderBy: [{ entry: { businessDate: "desc" } }, { id: "desc" }],
-    select: {
-      id: true,
-      amount: true,
-      customer: true,
-      entry: { select: { businessDate: true, employee: { select: { name: true } } } },
-    },
-  });
+  const lines: CreditRow[] = hasRange
+    ? await prisma.creditLine.findMany({
+        where: {
+          entry: { businessDate: { gte: dayBoundsUTC(lo).start, lt: dayBoundsUTC(hi).end } },
+        },
+        orderBy: [{ entry: { businessDate: "desc" } }, { id: "desc" }],
+        select: {
+          id: true,
+          amount: true,
+          customer: true,
+          entry: { select: { businessDate: true, employee: { select: { name: true } } } },
+        },
+      })
+    : [];
 
   const total = lines.reduce((s, l) => s + toNum(l.amount), 0);
 
@@ -64,56 +67,62 @@ export default async function CreditPage({
         </label>
       </form>
 
-      <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
-        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
-            Credit · {dayLabel(lo)} – {dayLabel(hi)}
-          </h2>
-          <p className="text-xs text-muted">
-            {lines.length} {lines.length === 1 ? "entry" : "entries"} · {inr(total)} total
-          </p>
-        </div>
-        {lines.length === 0 ? (
-          <p className="py-6 text-center text-sm text-faint">No credit in this period.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-left text-muted">
-                <tr>
-                  <th className="px-2 py-1.5 font-medium">Date</th>
-                  <th className="px-2 py-1.5 font-medium">Staff</th>
-                  <th className="px-2 py-1.5 font-medium">Customer</th>
-                  <th className="px-2 py-1.5 text-right font-medium">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lines.map((l) => (
-                  <tr key={l.id} className="border-t border-border">
-                    <td className="whitespace-nowrap px-2 py-1.5 text-muted">
-                      {l.entry.businessDate.toLocaleDateString("en-IN", {
-                        day: "2-digit",
-                        month: "short",
-                        timeZone: "UTC",
-                      })}
-                    </td>
-                    <td className="px-2 py-1.5">{l.entry.employee.name}</td>
-                    <td className="px-2 py-1.5 text-foreground">{l.customer}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums">{inr(toNum(l.amount))}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t-2 border-border font-semibold">
-                  <td className="px-2 py-2" colSpan={3}>
-                    Total
-                  </td>
-                  <td className="px-2 py-2 text-right tabular-nums">{inr(total)}</td>
-                </tr>
-              </tfoot>
-            </table>
+      {!hasRange ? (
+        <p className="px-1 text-sm text-muted">
+          Pick a start and end date to see the credit for that period.
+        </p>
+      ) : (
+        <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
+              Credit · {dayLabel(lo)} – {dayLabel(hi)}
+            </h2>
+            <p className="text-xs text-muted">
+              {lines.length} {lines.length === 1 ? "entry" : "entries"} · {inr(total)} total
+            </p>
           </div>
-        )}
-      </section>
+          {lines.length === 0 ? (
+            <p className="py-6 text-center text-sm text-faint">No credit in this period.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-left text-muted">
+                  <tr>
+                    <th className="px-2 py-1.5 font-medium">Date</th>
+                    <th className="px-2 py-1.5 font-medium">Staff</th>
+                    <th className="px-2 py-1.5 font-medium">Customer</th>
+                    <th className="px-2 py-1.5 text-right font-medium">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.map((l) => (
+                    <tr key={l.id} className="border-t border-border">
+                      <td className="whitespace-nowrap px-2 py-1.5 text-muted">
+                        {l.entry.businessDate.toLocaleDateString("en-IN", {
+                          day: "2-digit",
+                          month: "short",
+                          timeZone: "UTC",
+                        })}
+                      </td>
+                      <td className="px-2 py-1.5">{l.entry.employee.name}</td>
+                      <td className="px-2 py-1.5 text-foreground">{l.customer}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">{inr(toNum(l.amount))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-border font-semibold">
+                    <td className="px-2 py-2" colSpan={3}>
+                      Total
+                    </td>
+                    <td className="px-2 py-2 text-right tabular-nums">{inr(total)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }

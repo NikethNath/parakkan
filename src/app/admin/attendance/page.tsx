@@ -4,6 +4,14 @@ import AutoSubmitDate from "@/components/AutoSubmitDate";
 
 const isDate = (s?: string) => /^\d{4}-\d{2}-\d{2}$/.test(s ?? "");
 
+type Summary = {
+  id: number;
+  name: string;
+  active: boolean;
+  days: Set<string>;
+  shifts: number;
+};
+
 export default async function ViewAttendancePage({
   searchParams,
 }: {
@@ -11,49 +19,47 @@ export default async function ViewAttendancePage({
 }) {
   const sp = await searchParams;
   const today = istToday();
-  const toRaw = isDate(sp.to) ? sp.to! : today;
-  const fromRaw = isDate(sp.from) ? sp.from! : today.slice(0, 8) + "01"; // 1st of this month
+  // No default range — pick a start and end date (both inclusive) to load it.
+  const hasRange = isDate(sp.from) && isDate(sp.to);
+  const fromRaw = isDate(sp.from) ? sp.from! : "";
+  const toRaw = isDate(sp.to) ? sp.to! : "";
+  const lo = !hasRange ? "" : fromRaw <= toRaw ? fromRaw : toRaw;
+  const hi = !hasRange ? "" : fromRaw <= toRaw ? toRaw : fromRaw;
 
-  // Both inclusive; tolerate a reversed range by ordering the bounds.
-  const lo = fromRaw <= toRaw ? fromRaw : toRaw;
-  const hi = fromRaw <= toRaw ? toRaw : fromRaw;
-  const start = new Date(lo + "T00:00:00.000Z");
-  const endExclusive = dayBoundsUTC(hi).end;
+  let list: Summary[] = [];
+  let spanDays = 0;
 
-  const rows = await prisma.attendance.findMany({
-    where: { status: "PRESENT", date: { gte: start, lt: endExclusive } },
-    select: {
-      employeeId: true,
-      date: true,
-      employee: { select: { name: true, active: true } },
-    },
-  });
+  if (hasRange) {
+    const start = dayBoundsUTC(lo).start;
+    const endExclusive = dayBoundsUTC(hi).end;
+    const rows = await prisma.attendance.findMany({
+      where: { status: "PRESENT", date: { gte: start, lt: endExclusive } },
+      select: {
+        employeeId: true,
+        date: true,
+        employee: { select: { name: true, active: true } },
+      },
+    });
 
-  // employeeId -> { id, name, active, distinct days present, shift count }
-  const summary = new Map<
-    number,
-    { id: number; name: string; active: boolean; days: Set<string>; shifts: number }
-  >();
-  for (const r of rows) {
-    const cur =
-      summary.get(r.employeeId) ??
-      {
-        id: r.employeeId,
-        name: r.employee.name,
-        active: r.employee.active,
-        days: new Set<string>(),
-        shifts: 0,
-      };
-    cur.days.add(isoDate(r.date));
-    cur.shifts += 1;
-    summary.set(r.employeeId, cur);
+    const summary = new Map<number, Summary>();
+    for (const r of rows) {
+      const cur =
+        summary.get(r.employeeId) ?? {
+          id: r.employeeId,
+          name: r.employee.name,
+          active: r.employee.active,
+          days: new Set<string>(),
+          shifts: 0,
+        };
+      cur.days.add(isoDate(r.date));
+      cur.shifts += 1;
+      summary.set(r.employeeId, cur);
+    }
+    list = [...summary.values()].sort(
+      (a, b) => b.days.size - a.days.size || a.name.localeCompare(b.name),
+    );
+    spanDays = Math.round((endExclusive.getTime() - start.getTime()) / 86_400_000);
   }
-  const list = [...summary.values()].sort(
-    (a, b) => b.days.size - a.days.size || a.name.localeCompare(b.name),
-  );
-
-  const spanDays =
-    Math.round((endExclusive.getTime() - start.getTime()) / 86_400_000);
 
   return (
     <>
@@ -63,7 +69,7 @@ export default async function ViewAttendancePage({
           <AutoSubmitDate
             type="date"
             name="from"
-            defaultValue={lo}
+            defaultValue={fromRaw}
             max={today}
             className="rounded-lg border border-border px-3 py-1.5"
           />
@@ -73,49 +79,57 @@ export default async function ViewAttendancePage({
           <AutoSubmitDate
             type="date"
             name="to"
-            defaultValue={hi}
+            defaultValue={toRaw}
             max={today}
             className="rounded-lg border border-border px-3 py-1.5"
           />
         </label>
       </form>
 
-      <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
-        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
-            Present · {dayLabel(lo)} – {dayLabel(hi)}
-          </h2>
-          <p className="text-xs text-muted">
-            {spanDays} day{spanDays === 1 ? "" : "s"} · {list.length} present
-          </p>
-        </div>
+      {!hasRange ? (
+        <p className="px-1 text-sm text-muted">
+          Pick a start and end date to see who was present.
+        </p>
+      ) : (
+        <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
+              Present · {dayLabel(lo)} – {dayLabel(hi)}
+            </h2>
+            <p className="text-xs text-muted">
+              {spanDays} day{spanDays === 1 ? "" : "s"} · {list.length} present
+            </p>
+          </div>
 
-        {list.length === 0 ? (
-          <p className="py-6 text-center text-sm text-faint">No one was marked present in this period.</p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead className="text-left text-muted">
-              <tr>
-                <th className="px-2 py-1.5 font-medium">Employee</th>
-                <th className="px-2 py-1.5 text-right font-medium">Days present</th>
-                <th className="px-2 py-1.5 text-right font-medium">Shifts worked</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.map((s) => (
-                <tr key={s.id} className="border-t border-border">
-                  <td className="px-2 py-1.5 font-medium text-foreground">
-                    {s.name}
-                    {!s.active && <span className="ml-1 text-xs text-faint">(inactive)</span>}
-                  </td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{s.days.size}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums text-muted">{s.shifts}</td>
+          {list.length === 0 ? (
+            <p className="py-6 text-center text-sm text-faint">
+              No one was marked present in this period.
+            </p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="text-left text-muted">
+                <tr>
+                  <th className="px-2 py-1.5 font-medium">Employee</th>
+                  <th className="px-2 py-1.5 text-right font-medium">Days present</th>
+                  <th className="px-2 py-1.5 text-right font-medium">Shifts worked</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
+              </thead>
+              <tbody>
+                {list.map((s) => (
+                  <tr key={s.id} className="border-t border-border">
+                    <td className="px-2 py-1.5 font-medium text-foreground">
+                      {s.name}
+                      {!s.active && <span className="ml-1 text-xs text-faint">(inactive)</span>}
+                    </td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">{s.days.size}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-muted">{s.shifts}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+      )}
     </>
   );
 }
