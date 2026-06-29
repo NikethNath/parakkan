@@ -38,6 +38,17 @@ export function istToday(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
 }
 
+/** Current hour (0–23) in IST — used to pick the default shift. */
+export function istHour(): number {
+  return Number(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Kolkata",
+      hour: "2-digit",
+      hourCycle: "h23",
+    }).format(new Date()),
+  );
+}
+
 /** UTC [start, end) bounds for a YYYY-MM-DD business day (businessDate is UTC-midnight aligned). */
 export function dayBoundsUTC(date: string): { start: Date; end: Date } {
   const start = new Date(date + "T00:00:00.000Z");

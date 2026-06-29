@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FocusEvent, type FormEvent } from "react";
+import { useMemo, useState, type FocusEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   computeEntry,
@@ -10,7 +10,7 @@ import {
   SHIFTS,
   shortExcessLabel,
 } from "@/lib/calc";
-import { inr, litres, isoDate } from "@/lib/format";
+import { inr, litres, istToday, istHour } from "@/lib/format";
 
 type FormState = {
   businessDate: string;
@@ -35,9 +35,13 @@ type FormState = {
   pos: string;
 };
 
-const emptyForm = (): FormState => ({
-  businessDate: isoDate(new Date()),
-  shift: "MORNING",
+const emptyForm = (): FormState => {
+  const h = istHour();
+  return {
+  businessDate: istToday(),
+  // Default to the shift most likely in progress: morning from 3am–6pm IST,
+  // evening from 6pm through to 3am — so staff usually don't have to touch it.
+  shift: h >= 18 || h < 3 ? "EVENING" : "MORNING",
   product: "MS",
   rate: "",
   n1Open: "",
@@ -56,7 +60,8 @@ const emptyForm = (): FormState => ({
   coins: "",
   gpay: "",
   pos: "",
-});
+  };
+};
 
 type OilRow = { name: string; qty: string; unitPrice: string };
 type ExpenseRow = { description: string; amount: string };
@@ -67,7 +72,6 @@ export type DailyEntryInitial = {
   oil: OilRow[];
   expenses: ExpenseRow[];
   credit: CreditRow[];
-  verified?: boolean;
 };
 
 const n = (v: string) => (v === "" ? 0 : Number(v));
@@ -97,7 +101,6 @@ export default function DailyEntryForm({
   const [oil, setOil] = useState<OilRow[]>(initial?.oil ?? []);
   const [expenses, setExpenses] = useState<ExpenseRow[]>(initial?.expenses ?? []);
   const [credit, setCredit] = useState<CreditRow[]>(initial?.credit ?? []);
-  const [verified, setVerified] = useState<boolean>(initial?.verified ?? false);
   const [error, setError] = useState<string | null>(null);
   const [issues, setIssues] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -112,13 +115,6 @@ export default function DailyEntryForm({
   // day (cross-month payroll impact). The server enforces this too.
   const lockDate = mode === "edit" && !admin;
 
-  // Keep the footer "Verified" box in sync if the cash-verified tick on the
-  // detail page is toggled (router.refresh passes a new initial.verified), so a
-  // later Save can't silently revert it.
-  useEffect(() => {
-    setVerified(initial?.verified ?? false);
-  }, [initial?.verified]);
-
   const set = (k: keyof FormState, v: string) =>
     setForm((f) => ({ ...f, [k]: v }));
 
@@ -127,7 +123,6 @@ export default function DailyEntryForm({
     setOil(initial?.oil ?? []);
     setExpenses(initial?.expenses ?? []);
     setCredit(initial?.credit ?? []);
-    setVerified(initial?.verified ?? false);
     setError(null);
     setIssues([]);
   }
@@ -198,7 +193,6 @@ export default function DailyEntryForm({
       creditLines: credit
         .filter((l) => l.customer.trim() && n(l.amount) > 0)
         .map((l) => ({ customer: l.customer.trim(), amount: l.amount })),
-      ...(admin ? { verify: verified } : {}),
     };
     try {
       const res = await fetch(
@@ -503,41 +497,6 @@ export default function DailyEntryForm({
         )}
       />
 
-      {/* Expenses */}
-      <LineSection
-        title="Expenses"
-        addLabel="+ Add expense"
-        rows={expenses}
-        onAdd={() => setExpenses((r) => [...r, { description: "", amount: "" }])}
-        onRemove={(i) => setExpenses((r) => r.filter((_, j) => j !== i))}
-        total={computed.expensesTotal}
-        render={(row, i) => (
-          <>
-            <input
-              placeholder="Description"
-              value={row.description}
-              onChange={(e) =>
-                setExpenses((r) => r.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)))
-              }
-              className={lineInput + " col-span-3"}
-            />
-            <input
-              type="number"
-              inputMode="decimal"
-              placeholder="₹"
-              value={row.amount}
-              onChange={(e) =>
-                setExpenses((r) => r.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))
-              }
-              className={lineInput}
-            />
-            <span className="self-center text-right text-sm tabular-nums text-muted">
-              {inr(n(row.amount))}
-            </span>
-          </>
-        )}
-      />
-
       {/* Credit */}
       <LineSection
         title="Credit (khata) sales"
@@ -563,6 +522,41 @@ export default function DailyEntryForm({
               value={row.amount}
               onChange={(e) =>
                 setCredit((r) => r.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))
+              }
+              className={lineInput}
+            />
+            <span className="self-center text-right text-sm tabular-nums text-muted">
+              {inr(n(row.amount))}
+            </span>
+          </>
+        )}
+      />
+
+      {/* Expenses */}
+      <LineSection
+        title="Expenses"
+        addLabel="+ Add expense"
+        rows={expenses}
+        onAdd={() => setExpenses((r) => [...r, { description: "", amount: "" }])}
+        onRemove={(i) => setExpenses((r) => r.filter((_, j) => j !== i))}
+        total={computed.expensesTotal}
+        render={(row, i) => (
+          <>
+            <input
+              placeholder="Description"
+              value={row.description}
+              onChange={(e) =>
+                setExpenses((r) => r.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)))
+              }
+              className={lineInput + " col-span-3"}
+            />
+            <input
+              type="number"
+              inputMode="decimal"
+              placeholder="₹"
+              value={row.amount}
+              onChange={(e) =>
+                setExpenses((r) => r.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))
               }
               className={lineInput}
             />
@@ -622,17 +616,6 @@ export default function DailyEntryForm({
               </button>
             ) : (
               <>
-                {admin && (
-                  <label className="flex items-center gap-1.5 text-sm text-muted">
-                    <input
-                      type="checkbox"
-                      checked={verified}
-                      onChange={(e) => setVerified(e.target.checked)}
-                      className="h-4 w-4"
-                    />
-                    Verified
-                  </label>
-                )}
                 <button
                   type="submit"
                   disabled={saving}

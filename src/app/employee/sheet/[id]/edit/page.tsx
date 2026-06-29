@@ -52,7 +52,6 @@ export default async function EmployeeEditSheet({
     oil: entry.oilLines.map((l) => ({ name: l.name, qty: s(l.qty), unitPrice: s(l.unitPrice) })),
     expenses: entry.expenseLines.map((l) => ({ description: l.description, amount: s(l.amount) })),
     credit: entry.creditLines.map((l) => ({ customer: l.customer, amount: s(l.amount) })),
-    verified: false,
   };
 
   return (

@@ -69,7 +69,6 @@ export default async function AdminEntryDetail({
       customer: l.customer,
       amount: s(l.amount),
     })),
-    verified: entry.status === "VERIFIED",
   };
 
   return (
