@@ -1,134 +1,122 @@
 import { prisma } from "@/lib/db";
-import { inr, toNum, istDateTimeShort, istToday, dayBoundsUTC, dayLabel } from "@/lib/format";
-import MasterListManager from "@/components/MasterListManager";
-import ClassifySelect from "@/components/ClassifySelect";
-import DayFilter from "@/components/DayFilter";
+import { inr, toNum, istToday, dayBoundsUTC, dayLabel } from "@/lib/format";
 
-type Option = { id: number; name: string };
+const isDate = (s?: string) => /^\d{4}-\d{2}-\d{2}$/.test(s ?? "");
+
 type ExpenseRow = {
   id: number;
   amount: unknown;
   description: string;
-  bucketId: number | null;
-  entry: { submittedAt: Date; employee: { name: string } };
+  entry: { businessDate: Date; employee: { name: string } };
 };
-
-function ExpenseTable({ lines, options }: { lines: ExpenseRow[]; options: Option[] }) {
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="text-left text-muted">
-          <tr>
-            <th className="px-2 py-1.5 font-medium">Submitted (IST)</th>
-            <th className="px-2 py-1.5 font-medium">Staff</th>
-            <th className="px-2 py-1.5 font-medium">Description</th>
-            <th className="px-2 py-1.5 text-right font-medium">Amount</th>
-            <th className="px-2 py-1.5 font-medium">Bucket</th>
-          </tr>
-        </thead>
-        <tbody>
-          {lines.map((l) => (
-            <tr key={l.id} className="border-t border-border">
-              <td className="whitespace-nowrap px-2 py-1.5 text-xs text-muted">
-                {istDateTimeShort(l.entry.submittedAt)}
-              </td>
-              <td className="px-2 py-1.5">{l.entry.employee.name}</td>
-              <td className="px-2 py-1.5 text-foreground">{l.description}</td>
-              <td className="px-2 py-1.5 text-right tabular-nums">{inr(toNum(l.amount))}</td>
-              <td className="px-2 py-1.5">
-                <ClassifySelect
-                  endpoint={`/api/expense-lines/${l.id}`}
-                  field="bucketId"
-                  current={l.bucketId}
-                  options={options}
-                />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
 
 export default async function ExpensesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string }>;
+  searchParams: Promise<{ from?: string; to?: string }>;
 }) {
   const sp = await searchParams;
   const today = istToday();
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(sp.date ?? "") ? sp.date! : today;
-  const { start, end } = dayBoundsUTC(date);
+  // Default to this month so far; pick any start/end range above.
+  const fromRaw = isDate(sp.from) ? sp.from! : today.slice(0, 8) + "01";
+  const toRaw = isDate(sp.to) ? sp.to! : today;
+  const lo = fromRaw <= toRaw ? fromRaw : toRaw;
+  const hi = fromRaw <= toRaw ? toRaw : fromRaw;
+  const start = dayBoundsUTC(lo).start;
+  const end = dayBoundsUTC(hi).end;
 
-  const lineInclude = {
-    entry: { select: { submittedAt: true, employee: { select: { name: true } } } },
-  } as const;
+  const lines: ExpenseRow[] = await prisma.expenseLine.findMany({
+    where: { entry: { businessDate: { gte: start, lt: end } } },
+    orderBy: [{ entry: { businessDate: "desc" } }, { id: "desc" }],
+    select: {
+      id: true,
+      amount: true,
+      description: true,
+      entry: { select: { businessDate: true, employee: { select: { name: true } } } },
+    },
+  });
 
-  const [buckets, dayLines, unassignedLines] = await Promise.all([
-    prisma.expenseBucket.findMany({
-      orderBy: [{ active: "desc" }, { name: "asc" }],
-      include: { _count: { select: { expenseLines: true } } },
-    }),
-    prisma.expenseLine.findMany({
-      where: { entry: { businessDate: { gte: start, lt: end } } },
-      orderBy: { entry: { submittedAt: "desc" } },
-      include: lineInclude,
-    }),
-    prisma.expenseLine.findMany({
-      where: { bucketId: null },
-      orderBy: { entry: { submittedAt: "desc" } },
-      take: 200,
-      include: lineInclude,
-    }),
-  ]);
-
-  const options = buckets.filter((b) => b.active).map((b) => ({ id: b.id, name: b.name }));
-  const dayTotal = dayLines.reduce((s, l) => s + toNum(l.amount), 0);
+  const total = lines.reduce((s, l) => s + toNum(l.amount), 0);
 
   return (
     <div className="space-y-4 pb-6">
-      <MasterListManager
-        title="Expense buckets"
-        endpoint="/api/expense-buckets"
-        noun="bucket"
-        items={buckets.map((b) => ({
-          id: b.id,
-          name: b.name,
-          active: b.active,
-          count: b._count.expenseLines,
-        }))}
-      />
-
-      <DayFilter date={date} today={today} />
-
-      <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
-        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
-            Unassigned — needs a bucket
-          </h2>
-          <p className="text-xs text-muted">{unassignedLines.length} waiting</p>
-        </div>
-        {unassignedLines.length === 0 ? (
-          <p className="py-4 text-center text-sm text-faint">Nothing waiting — all expenses are classified.</p>
-        ) : (
-          <ExpenseTable lines={unassignedLines} options={options} />
-        )}
-      </section>
+      <form className="flex flex-wrap items-end gap-3 rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border print:hidden">
+        <label className="text-sm">
+          <span className="mb-1 block font-medium text-foreground">From</span>
+          <input
+            type="date"
+            name="from"
+            defaultValue={fromRaw}
+            max={today}
+            className="rounded-lg border border-border px-3 py-1.5"
+          />
+        </label>
+        <label className="text-sm">
+          <span className="mb-1 block font-medium text-foreground">To</span>
+          <input
+            type="date"
+            name="to"
+            defaultValue={toRaw}
+            max={today}
+            className="rounded-lg border border-border px-3 py-1.5"
+          />
+        </label>
+        <button
+          type="submit"
+          className="rounded-lg bg-accent px-4 py-1.5 font-medium text-white hover:bg-accent-strong"
+        >
+          Show
+        </button>
+      </form>
 
       <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
-            Expenses · {dayLabel(date)}
+            Expenses · {dayLabel(lo)} – {dayLabel(hi)}
           </h2>
           <p className="text-xs text-muted">
-            {dayLines.length} entries · {inr(dayTotal)} total
+            {lines.length} {lines.length === 1 ? "entry" : "entries"} · {inr(total)} total
           </p>
         </div>
-        {dayLines.length === 0 ? (
-          <p className="py-6 text-center text-sm text-faint">No expenses on {dayLabel(date)}.</p>
+        {lines.length === 0 ? (
+          <p className="py-6 text-center text-sm text-faint">No expenses in this period.</p>
         ) : (
-          <ExpenseTable lines={dayLines} options={options} />
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-left text-muted">
+                <tr>
+                  <th className="px-2 py-1.5 font-medium">Date</th>
+                  <th className="px-2 py-1.5 font-medium">Staff</th>
+                  <th className="px-2 py-1.5 font-medium">Description</th>
+                  <th className="px-2 py-1.5 text-right font-medium">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lines.map((l) => (
+                  <tr key={l.id} className="border-t border-border">
+                    <td className="whitespace-nowrap px-2 py-1.5 text-muted">
+                      {l.entry.businessDate.toLocaleDateString("en-IN", {
+                        day: "2-digit",
+                        month: "short",
+                        timeZone: "UTC",
+                      })}
+                    </td>
+                    <td className="px-2 py-1.5">{l.entry.employee.name}</td>
+                    <td className="px-2 py-1.5 text-foreground">{l.description}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">{inr(toNum(l.amount))}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-border font-semibold">
+                  <td className="px-2 py-2" colSpan={3}>
+                    Total
+                  </td>
+                  <td className="px-2 py-2 text-right tabular-nums">{inr(total)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         )}
       </section>
     </div>
