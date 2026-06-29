@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { isoDate, istToday } from "@/lib/format";
 import AttendanceDay from "@/components/AttendanceDay";
+import AutoSubmitDate from "@/components/AutoSubmitDate";
 
 const isDate = (s?: string) => /^\d{4}-\d{2}-\d{2}$/.test(s ?? "");
 
@@ -52,7 +53,7 @@ export default async function EditAttendancePage({
       <form className="flex flex-wrap items-end gap-3 rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
         <label className="text-sm">
           <span className="mb-1 block font-medium text-foreground">Day</span>
-          <input
+          <AutoSubmitDate
             type="date"
             name="date"
             defaultValue={date}
@@ -60,12 +61,6 @@ export default async function EditAttendancePage({
             className="rounded-lg border border-border px-3 py-1.5"
           />
         </label>
-        <button
-          type="submit"
-          className="rounded-lg bg-accent px-4 py-1.5 font-medium text-white hover:bg-accent-strong"
-        >
-          Apply
-        </button>
       </form>
 
       <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">

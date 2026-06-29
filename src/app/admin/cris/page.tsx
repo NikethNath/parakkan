@@ -4,6 +4,7 @@ import { toNum, isoDate } from "@/lib/format";
 import CrisReportUpload from "@/components/CrisReportUpload";
 import CrisFetchForm from "@/components/CrisFetchForm";
 import CrisCompare from "@/components/CrisCompare";
+import AutoSubmitDate from "@/components/AutoSubmitDate";
 
 function monthBounds(month: string) {
   const [y, m] = month.split("-").map(Number);
@@ -109,15 +110,12 @@ export default async function CrisPage({
             )}
           </div>
           <form className="flex items-end gap-2">
-            <input
+            <AutoSubmitDate
               type="month"
               name="month"
               defaultValue={month}
               className="rounded-lg border border-border px-3 py-1.5 text-sm"
             />
-            <button className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-strong">
-              Apply
-            </button>
           </form>
         </div>
 

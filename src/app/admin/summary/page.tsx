@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { inr, toNum, isoDate, istToday, dayBoundsUTC, dayLabel } from "@/lib/format";
 import PrintButton from "@/components/PrintButton";
+import AutoSubmitDate from "@/components/AutoSubmitDate";
 
 const isDate = (s?: string) => /^\d{4}-\d{2}-\d{2}$/.test(s ?? "");
 const L = (n: number) =>
@@ -144,7 +145,7 @@ export default async function SummaryPage({
         <form className="flex flex-wrap items-end gap-3 rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border print:hidden">
           <label className="text-sm">
             <span className="mb-1 block font-medium text-foreground">From</span>
-            <input
+            <AutoSubmitDate
               type="date"
               name="from"
               defaultValue={fromRaw}
@@ -154,7 +155,7 @@ export default async function SummaryPage({
           </label>
           <label className="text-sm">
             <span className="mb-1 block font-medium text-foreground">To</span>
-            <input
+            <AutoSubmitDate
               type="date"
               name="to"
               defaultValue={toRaw}
@@ -162,12 +163,6 @@ export default async function SummaryPage({
               className="rounded-lg border border-border px-3 py-1.5"
             />
           </label>
-          <button
-            type="submit"
-            className="rounded-lg bg-accent px-4 py-1.5 font-medium text-white hover:bg-accent-strong"
-          >
-            Show
-          </button>
         </form>
         {hasRange && <PrintButton />}
       </div>

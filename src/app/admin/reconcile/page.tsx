@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { inr, toNum, isoDate } from "@/lib/format";
 import StatementUpload from "@/components/StatementUpload";
 import BankReconcile from "@/components/BankReconcile";
+import AutoSubmitDate from "@/components/AutoSubmitDate";
 
 function monthBounds(month: string) {
   const [y, m] = month.split("-").map(Number);
@@ -79,15 +80,12 @@ export default async function ReconcilePage({
             )}
           </div>
           <form className="flex items-end gap-2">
-            <input
+            <AutoSubmitDate
               type="month"
               name="month"
               defaultValue={month}
               className="rounded-lg border border-border px-3 py-1.5 text-sm"
             />
-            <button className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-strong">
-              Apply
-            </button>
           </form>
         </div>
 
