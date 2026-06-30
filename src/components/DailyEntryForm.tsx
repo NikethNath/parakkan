@@ -530,41 +530,6 @@ export default function DailyEntryForm({
         )}
       />
 
-      {/* Expenses */}
-      <LineSection
-        title="Expenses"
-        addLabel="+ Add expense"
-        rows={expenses}
-        onAdd={() => setExpenses((r) => [...r, { description: "", amount: "" }])}
-        onRemove={(i) => setExpenses((r) => r.filter((_, j) => j !== i))}
-        total={computed.expensesTotal}
-        render={(row, i) => (
-          <>
-            <input
-              placeholder="Description"
-              value={row.description}
-              onChange={(e) =>
-                setExpenses((r) => r.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)))
-              }
-              className={lineInput + " col-span-3"}
-            />
-            <input
-              type="number"
-              inputMode="decimal"
-              placeholder="₹"
-              value={row.amount}
-              onChange={(e) =>
-                setExpenses((r) => r.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))
-              }
-              className={lineInput}
-            />
-            <span className="self-center text-right text-sm tabular-nums text-muted">
-              {inr(n(row.amount))}
-            </span>
-          </>
-        )}
-      />
-
       {/* Salary / advances */}
       <LineSection
         title="Salary / advances"
@@ -590,6 +555,41 @@ export default function DailyEntryForm({
               value={row.amount}
               onChange={(e) =>
                 setSalary((r) => r.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))
+              }
+              className={lineInput}
+            />
+            <span className="self-center text-right text-sm tabular-nums text-muted">
+              {inr(n(row.amount))}
+            </span>
+          </>
+        )}
+      />
+
+      {/* Expenses */}
+      <LineSection
+        title="Expenses"
+        addLabel="+ Add expense"
+        rows={expenses}
+        onAdd={() => setExpenses((r) => [...r, { description: "", amount: "" }])}
+        onRemove={(i) => setExpenses((r) => r.filter((_, j) => j !== i))}
+        total={computed.expensesTotal}
+        render={(row, i) => (
+          <>
+            <input
+              placeholder="Description"
+              value={row.description}
+              onChange={(e) =>
+                setExpenses((r) => r.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)))
+              }
+              className={lineInput + " col-span-3"}
+            />
+            <input
+              type="number"
+              inputMode="decimal"
+              placeholder="₹"
+              value={row.amount}
+              onChange={(e) =>
+                setExpenses((r) => r.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))
               }
               className={lineInput}
             />

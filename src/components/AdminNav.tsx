@@ -17,6 +17,7 @@ const items: Item[] = [
   { href: "/admin/cris", label: "CRIS" },
   { href: "/admin/credit", label: "Credit" },
   { href: "/admin/expenses", label: "Expenses" },
+  { href: "/admin/salary", label: "Salary" },
   { href: "/admin/oil", label: "Oil" },
   { href: "/admin/summary", label: "Summary" },
   { href: "/admin/shortexcess", label: "Short/Excess" },
