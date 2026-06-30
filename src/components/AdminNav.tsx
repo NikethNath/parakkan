@@ -14,6 +14,7 @@ const links = [
   { href: "/admin/credit", label: "Credit" },
   { href: "/admin/expenses", label: "Expenses" },
   { href: "/admin/oil", label: "Oil" },
+  { href: "/admin/meter", label: "Meter" },
   { href: "/admin/reconcile", label: "Reconcile" },
   { href: "/admin/dip", label: "Dip chart" },
   { href: "/admin/astm", label: "ASTM 3B" },
