@@ -50,8 +50,7 @@ const reading = z.coerce.number().finite().min(0).default(0);
 
 export const oilLineSchema = z.object({
   name: z.string().trim().min(1, "Oil name required"),
-  qty: z.coerce.number().finite().positive(),
-  unitPrice: money.default(0),
+  amount: money.positive(),
 });
 
 export const expenseLineSchema = z.object({
@@ -107,8 +106,7 @@ export const entryInputSchema = z
 
 export interface OilLine {
   name: string;
-  qty: number;
-  unitPrice: number;
+  amount: number;
 }
 export interface ExpenseLine {
   description: string;
@@ -158,7 +156,7 @@ export type RawEntryInput = Partial<{
     "oilLines" | "expenseLines" | "creditLines"
   >]: number | string;
 }> & {
-  oilLines?: Array<{ name?: string; qty?: number | string; unitPrice?: number | string }>;
+  oilLines?: Array<{ name?: string; amount?: number | string }>;
   expenseLines?: Array<{ description?: string; amount?: number | string }>;
   creditLines?: Array<{ customer?: string; amount?: number | string }>;
 };
@@ -226,7 +224,7 @@ export function computeEntry(input: RawEntryInput): EntryComputed {
 
   const oilTotal = round2(
     (input.oilLines ?? []).reduce(
-      (s, l) => s + num(l.qty) * num(l.unitPrice),
+      (s, l) => s + num(l.amount),
       0,
     ),
   );

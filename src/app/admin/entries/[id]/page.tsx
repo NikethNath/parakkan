@@ -58,8 +58,7 @@ export default async function AdminEntryDetail({
     },
     oil: entry.oilLines.map((l) => ({
       name: l.name,
-      qty: s(l.qty),
-      unitPrice: s(l.unitPrice),
+      amount: s(l.amount),
     })),
     expenses: entry.expenseLines.map((l) => ({
       description: l.description,

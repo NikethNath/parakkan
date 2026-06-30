@@ -63,7 +63,7 @@ const emptyForm = (): FormState => {
   };
 };
 
-type OilRow = { name: string; qty: string; unitPrice: string };
+type OilRow = { name: string; amount: string };
 type ExpenseRow = { description: string; amount: string };
 type CreditRow = { customer: string; amount: string };
 
@@ -185,8 +185,8 @@ export default function DailyEntryForm({
     const payload = {
       ...form,
       oilLines: oil
-        .filter((l) => l.name.trim() && n(l.qty) > 0)
-        .map((l) => ({ name: l.name.trim(), qty: l.qty, unitPrice: l.unitPrice })),
+        .filter((l) => l.name.trim() && n(l.amount) > 0)
+        .map((l) => ({ name: l.name.trim(), amount: l.amount })),
       expenseLines: expenses
         .filter((l) => l.description.trim() && n(l.amount) > 0)
         .map((l) => ({ description: l.description.trim(), amount: l.amount })),
@@ -457,7 +457,7 @@ export default function DailyEntryForm({
         title="Oil & lubricants"
         addLabel="+ Add oil"
         rows={oil}
-        onAdd={() => setOil((r) => [...r, { name: "", qty: "", unitPrice: "" }])}
+        onAdd={() => setOil((r) => [...r, { name: "", amount: "" }])}
         onRemove={(i) => setOil((r) => r.filter((_, j) => j !== i))}
         total={computed.oilTotal}
         render={(row, i) => (
@@ -468,30 +468,20 @@ export default function DailyEntryForm({
               onChange={(e) =>
                 setOil((r) => r.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))
               }
-              className={lineInput + " col-span-2"}
+              className={lineInput + " col-span-3"}
             />
             <input
               type="number"
               inputMode="decimal"
-              placeholder="Qty"
-              value={row.qty}
+              placeholder="₹"
+              value={row.amount}
               onChange={(e) =>
-                setOil((r) => r.map((x, j) => (j === i ? { ...x, qty: e.target.value } : x)))
-              }
-              className={lineInput}
-            />
-            <input
-              type="number"
-              inputMode="decimal"
-              placeholder="₹/unit"
-              value={row.unitPrice}
-              onChange={(e) =>
-                setOil((r) => r.map((x, j) => (j === i ? { ...x, unitPrice: e.target.value } : x)))
+                setOil((r) => r.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))
               }
               className={lineInput}
             />
             <span className="self-center text-right text-sm tabular-nums text-muted">
-              {inr(n(row.qty) * n(row.unitPrice))}
+              {inr(n(row.amount))}
             </span>
           </>
         )}

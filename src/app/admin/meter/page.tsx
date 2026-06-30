@@ -68,7 +68,8 @@ export default async function MeterPage({
     );
     map.set(d, row);
   }
-  const rows = [...map.values()].sort((a, b) => b.date.localeCompare(a.date));
+  // Chronological ledger: oldest day at the top, most recent at the bottom.
+  const rows = [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
   // Submission order is unreliable, so sort each product's readings ascending
   // (MS and HSD independently) — N1 is the lowest, up to the highest.
   for (const r of rows) {

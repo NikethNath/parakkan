@@ -8,7 +8,6 @@ type Option = { id: number; name: string };
 type OilRow = {
   id: number;
   amount: unknown;
-  qty: unknown;
   name: string;
   bucketId: number | null;
   entry: { submittedAt: Date; employee: { name: string } };
@@ -23,7 +22,6 @@ function OilTable({ lines, options }: { lines: OilRow[]; options: Option[] }) {
             <th className="px-2 py-1.5 font-medium">Submitted (IST)</th>
             <th className="px-2 py-1.5 font-medium">Staff</th>
             <th className="px-2 py-1.5 font-medium">Oil (typed)</th>
-            <th className="px-2 py-1.5 text-right font-medium">Qty</th>
             <th className="px-2 py-1.5 text-right font-medium">Amount</th>
             <th className="px-2 py-1.5 font-medium">Bucket</th>
           </tr>
@@ -36,7 +34,6 @@ function OilTable({ lines, options }: { lines: OilRow[]; options: Option[] }) {
               </td>
               <td className="px-2 py-1.5">{l.entry.employee.name}</td>
               <td className="px-2 py-1.5 text-foreground">{l.name}</td>
-              <td className="px-2 py-1.5 text-right tabular-nums text-muted">{toNum(l.qty)}</td>
               <td className="px-2 py-1.5 text-right tabular-nums">{inr(toNum(l.amount))}</td>
               <td className="px-2 py-1.5">
                 <ClassifySelect

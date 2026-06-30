@@ -34,7 +34,7 @@ const base: EntryInput = {
   coins: 0,
   gpay: 10000,
   pos: 5000,
-  oilLines: [{ name: "HP Racer4 1L", qty: 2, unitPrice: 500 }],
+  oilLines: [{ name: "HP Racer4 1L", amount: 1000 }],
   expenseLines: [{ description: "Tea", amount: 200 }],
   creditLines: [{ customer: "Ravi Lorry", amount: 3000 }],
 };

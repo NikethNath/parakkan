@@ -79,9 +79,9 @@ export async function POST(req: Request) {
           oilLines: {
             create: input.oilLines.map((l) => ({
               name: l.name,
-              qty: l.qty,
-              unitPrice: l.unitPrice,
-              amount: Math.round(l.qty * l.unitPrice * 100) / 100,
+              qty: 0, // qty/unitPrice retired — staff now type the amount directly
+              unitPrice: 0,
+              amount: l.amount,
             })),
           },
           expenseLines: {
