@@ -18,7 +18,7 @@ export default async function EmployeeEditSheet({
   // An employee can only open their OWN sheet.
   const entry = await prisma.dailyEntry.findFirst({
     where: { id, employeeId: user.uid },
-    include: { oilLines: true, expenseLines: true, creditLines: true },
+    include: { oilLines: true, expenseLines: true, salaryLines: true, creditLines: true },
   });
   if (!entry) notFound();
   // Once the admin verifies a sheet the employee can no longer change it.
@@ -51,6 +51,7 @@ export default async function EmployeeEditSheet({
     },
     oil: entry.oilLines.map((l) => ({ name: l.name, amount: s(l.amount) })),
     expenses: entry.expenseLines.map((l) => ({ description: l.description, amount: s(l.amount) })),
+    salary: entry.salaryLines.map((l) => ({ description: l.description, amount: s(l.amount) })),
     credit: entry.creditLines.map((l) => ({ customer: l.customer, amount: s(l.amount) })),
   };
 

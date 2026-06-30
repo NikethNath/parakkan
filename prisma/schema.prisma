@@ -102,6 +102,7 @@ model DailyEntry {
   cashTotal        Decimal @default(0) @db.Decimal(12, 2)
   oilTotal         Decimal @default(0) @db.Decimal(12, 2)
   expensesTotal    Decimal @default(0) @db.Decimal(12, 2)
+  salaryTotal      Decimal @default(0) @db.Decimal(12, 2)
   creditTotal      Decimal @default(0) @db.Decimal(12, 2)
   grossLitres      Decimal @default(0) @db.Decimal(12, 2)
   netSalableLitres Decimal @default(0) @db.Decimal(12, 2)
@@ -120,6 +121,7 @@ model DailyEntry {
 
   oilLines     OilLine[]
   expenseLines ExpenseLine[]
+  salaryLines  SalaryLine[]
   creditLines  CreditLine[]
   audits       EntryAudit[]
 
@@ -167,6 +169,16 @@ model CreditLine {
   amount     Decimal    @db.Decimal(12, 2)
   creditor   Creditor?  @relation(fields: [creditorId], references: [id], onDelete: SetNull)
   creditorId Int?
+}
+
+// Salary / advances paid out of the till during a shift. Staff type a name and
+// amount per line; treated like an expense in the short/excess reconciliation.
+model SalaryLine {
+  id          Int        @id @default(autoincrement())
+  entry       DailyEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  entryId     Int
+  description String
+  amount      Decimal    @db.Decimal(12, 2)
 }
 
 // Admin-managed master list of credit accounts (khata). Staff type a free-text

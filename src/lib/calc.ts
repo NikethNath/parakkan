@@ -8,8 +8,8 @@ import { z } from "zod";
  * are never trusted). Keep it pure: no I/O, no Decimal, just numbers in/out.
  *
  * Core formula (confirmed with the dealer):
- *   shortExcess = cashTotal + gpay + pos + expensesTotal + creditTotal
- *                 - oilTotal - fuelExpected
+ *   shortExcess = cashTotal + gpay + pos + expensesTotal + salaryTotal
+ *                 + creditTotal - oilTotal - fuelExpected
  *   fuelExpected = (gross dispensed - test litres) * rate
  *   > 0  => EXCESS (added to the employee's salary at month end)
  *   < 0  => SHORT  (deducted)
@@ -58,6 +58,11 @@ export const expenseLineSchema = z.object({
   amount: money.positive(),
 });
 
+export const salaryLineSchema = z.object({
+  description: z.string().trim().min(1, "Name required"),
+  amount: money.positive(),
+});
+
 export const creditLineSchema = z.object({
   customer: z.string().trim().min(1, "Customer name required"),
   amount: money.positive(),
@@ -89,6 +94,7 @@ export const entryInputSchema = z
 
     oilLines: z.array(oilLineSchema).default([]),
     expenseLines: z.array(expenseLineSchema).default([]),
+    salaryLines: z.array(salaryLineSchema).default([]),
     creditLines: z.array(creditLineSchema).default([]),
   })
   .superRefine((v, ctx) => {
@@ -109,6 +115,10 @@ export interface OilLine {
   amount: number;
 }
 export interface ExpenseLine {
+  description: string;
+  amount: number;
+}
+export interface SalaryLine {
   description: string;
   amount: number;
 }
@@ -140,6 +150,7 @@ export interface EntryInput {
   pos: number;
   oilLines: OilLine[];
   expenseLines: ExpenseLine[];
+  salaryLines: SalaryLine[];
   creditLines: CreditLine[];
 }
 
@@ -153,11 +164,12 @@ export type EntryInputParsed = z.output<typeof entryInputSchema>;
 export type RawEntryInput = Partial<{
   [K in keyof Omit<
     EntryInput,
-    "oilLines" | "expenseLines" | "creditLines"
+    "oilLines" | "expenseLines" | "salaryLines" | "creditLines"
   >]: number | string;
 }> & {
   oilLines?: Array<{ name?: string; amount?: number | string }>;
   expenseLines?: Array<{ description?: string; amount?: number | string }>;
+  salaryLines?: Array<{ description?: string; amount?: number | string }>;
   creditLines?: Array<{ customer?: string; amount?: number | string }>;
 };
 
@@ -172,6 +184,7 @@ export interface EntryComputed {
   cashTotal: number;
   oilTotal: number;
   expensesTotal: number;
+  salaryTotal: number;
   creditTotal: number;
   /** cash + gpay + pos (the money physically/digitally in hand) */
   collected: number;
@@ -231,6 +244,9 @@ export function computeEntry(input: RawEntryInput): EntryComputed {
   const expensesTotal = round2(
     (input.expenseLines ?? []).reduce((s, l) => s + num(l.amount), 0),
   );
+  const salaryTotal = round2(
+    (input.salaryLines ?? []).reduce((s, l) => s + num(l.amount), 0),
+  );
   const creditTotal = round2(
     (input.creditLines ?? []).reduce((s, l) => s + num(l.amount), 0),
   );
@@ -240,7 +256,14 @@ export function computeEntry(input: RawEntryInput): EntryComputed {
   const collected = round2(cashTotal + gpay + pos);
 
   const shortExcess = round2(
-    cashTotal + gpay + pos + expensesTotal + creditTotal - oilTotal - fuelExpected,
+    cashTotal +
+      gpay +
+      pos +
+      expensesTotal +
+      salaryTotal +
+      creditTotal -
+      oilTotal -
+      fuelExpected,
   );
 
   return {
@@ -250,6 +273,7 @@ export function computeEntry(input: RawEntryInput): EntryComputed {
     cashTotal,
     oilTotal,
     expensesTotal,
+    salaryTotal,
     creditTotal,
     collected,
     shortExcess,

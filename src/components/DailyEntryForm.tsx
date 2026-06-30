@@ -65,12 +65,14 @@ const emptyForm = (): FormState => {
 
 type OilRow = { name: string; amount: string };
 type ExpenseRow = { description: string; amount: string };
+type SalaryRow = { description: string; amount: string };
 type CreditRow = { customer: string; amount: string };
 
 export type DailyEntryInitial = {
   form: Partial<FormState>;
   oil: OilRow[];
   expenses: ExpenseRow[];
+  salary: SalaryRow[];
   credit: CreditRow[];
 };
 
@@ -100,6 +102,7 @@ export default function DailyEntryForm({
   }));
   const [oil, setOil] = useState<OilRow[]>(initial?.oil ?? []);
   const [expenses, setExpenses] = useState<ExpenseRow[]>(initial?.expenses ?? []);
+  const [salary, setSalary] = useState<SalaryRow[]>(initial?.salary ?? []);
   const [credit, setCredit] = useState<CreditRow[]>(initial?.credit ?? []);
   const [error, setError] = useState<string | null>(null);
   const [issues, setIssues] = useState<string[]>([]);
@@ -122,6 +125,7 @@ export default function DailyEntryForm({
     setForm({ ...emptyForm(), ...(initial?.form ?? {}) });
     setOil(initial?.oil ?? []);
     setExpenses(initial?.expenses ?? []);
+    setSalary(initial?.salary ?? []);
     setCredit(initial?.credit ?? []);
     setError(null);
     setIssues([]);
@@ -133,9 +137,10 @@ export default function DailyEntryForm({
         ...form,
         oilLines: oil,
         expenseLines: expenses,
+        salaryLines: salary,
         creditLines: credit,
       }),
-    [form, oil, expenses, credit],
+    [form, oil, expenses, salary, credit],
   );
 
   const label = shortExcessLabel(computed.shortExcess);
@@ -188,6 +193,9 @@ export default function DailyEntryForm({
         .filter((l) => l.name.trim() && n(l.amount) > 0)
         .map((l) => ({ name: l.name.trim(), amount: l.amount })),
       expenseLines: expenses
+        .filter((l) => l.description.trim() && n(l.amount) > 0)
+        .map((l) => ({ description: l.description.trim(), amount: l.amount })),
+      salaryLines: salary
         .filter((l) => l.description.trim() && n(l.amount) > 0)
         .map((l) => ({ description: l.description.trim(), amount: l.amount })),
       creditLines: credit
@@ -547,6 +555,41 @@ export default function DailyEntryForm({
               value={row.amount}
               onChange={(e) =>
                 setExpenses((r) => r.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))
+              }
+              className={lineInput}
+            />
+            <span className="self-center text-right text-sm tabular-nums text-muted">
+              {inr(n(row.amount))}
+            </span>
+          </>
+        )}
+      />
+
+      {/* Salary / advances */}
+      <LineSection
+        title="Salary / advances"
+        addLabel="+ Add salary"
+        rows={salary}
+        onAdd={() => setSalary((r) => [...r, { description: "", amount: "" }])}
+        onRemove={(i) => setSalary((r) => r.filter((_, j) => j !== i))}
+        total={computed.salaryTotal}
+        render={(row, i) => (
+          <>
+            <input
+              placeholder="Name"
+              value={row.description}
+              onChange={(e) =>
+                setSalary((r) => r.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)))
+              }
+              className={lineInput + " col-span-3"}
+            />
+            <input
+              type="number"
+              inputMode="decimal"
+              placeholder="₹"
+              value={row.amount}
+              onChange={(e) =>
+                setSalary((r) => r.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))
               }
               className={lineInput}
             />

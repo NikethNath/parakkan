@@ -74,6 +74,17 @@ describe("computeEntry", () => {
     expect(withCredit - withoutCredit).toBe(3000);
   });
 
+  it("adds salary / advances paid out, like an expense", () => {
+    const baseSE = computeEntry(base).shortExcess;
+    const withSalary = computeEntry({
+      ...base,
+      salaryLines: [{ description: "Advance to Ramesh", amount: 1500 }],
+    });
+    expect(withSalary.salaryTotal).toBe(1500);
+    // money left the till but is accounted for -> raises short/excess by 1,500
+    expect(withSalary.shortExcess - baseSE).toBe(1500);
+  });
+
   it("uses the absolute value of each nozzle's difference", () => {
     // swap opening/closing on nozzle 1 -> same 500 L via abs
     const swapped = computeEntry({ ...base, n1Open: 1500, n1Close: 1000 });

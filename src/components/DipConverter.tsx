@@ -84,7 +84,7 @@ export default function DipConverter() {
             <div>
               <p className="text-xs text-muted">Dip height</p>
               <p className="text-3xl font-bold tabular-nums text-foreground">
-                {f1(result.dip)} <span className="text-lg font-semibold text-muted">mm</span>
+                {f1(result.dip / 10)} <span className="text-lg font-semibold text-muted">cm</span>
               </p>
             </div>
             <p className="text-sm text-muted">

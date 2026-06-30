@@ -14,6 +14,7 @@ type Row = {
   hsdTest: number;
   credit: number;
   expense: number;
+  salary: number;
   oil: number;
   cash: number;
   gpayStmt: number;
@@ -29,6 +30,7 @@ const KEYS = [
   "hsdTest",
   "credit",
   "expense",
+  "salary",
   "oil",
   "cash",
   "gpayStmt",
@@ -44,6 +46,7 @@ const COLS: { key: keyof Row; label: string; kind: "L" | "money" }[] = [
   { key: "hsdTest", label: "HSD test (L)", kind: "L" },
   { key: "credit", label: "Credit", kind: "money" },
   { key: "expense", label: "Expense", kind: "money" },
+  { key: "salary", label: "Salary", kind: "money" },
   { key: "oil", label: "Oil", kind: "money" },
   { key: "cash", label: "Cash", kind: "money" },
   { key: "gpayStmt", label: "GPay (stmt)", kind: "money" },
@@ -87,6 +90,7 @@ export default async function SummaryPage({
           testLitres: true,
           creditTotal: true,
           expensesTotal: true,
+          salaryTotal: true,
           oilTotal: true,
           cashTotal: true,
           gpay: true,
@@ -120,6 +124,7 @@ export default async function SummaryPage({
       }
       r.credit += toNum(e.creditTotal);
       r.expense += toNum(e.expensesTotal);
+      r.salary += toNum(e.salaryTotal);
       r.oil += toNum(e.oilTotal);
       r.cash += toNum(e.cashTotal);
       r.gpayStaff += toNum(e.gpay);

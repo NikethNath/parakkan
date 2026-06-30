@@ -22,6 +22,7 @@ export default async function EmployeeSheetDetail({
     include: {
       oilLines: true,
       expenseLines: true,
+      salaryLines: true,
       creditLines: true,
       audits: {
         orderBy: { changedAt: "asc" },
@@ -145,6 +146,9 @@ export default async function EmployeeSheetDetail({
             {entry.expenseLines.length > 0 && (
               <Row label="Expenses total">{inr(toNum(entry.expensesTotal))}</Row>
             )}
+            {entry.salaryLines.length > 0 && (
+              <Row label="Salary total">{inr(toNum(entry.salaryTotal))}</Row>
+            )}
             {entry.creditLines.length > 0 && (
               <Row label="Credit total">{inr(toNum(entry.creditTotal))}</Row>
             )}
@@ -198,6 +202,7 @@ const FIELD_LABELS: Record<string, string> = {
   fuelExpected: "Fuel expected",
   oilTotal: "Oil total",
   expensesTotal: "Expenses total",
+  salaryTotal: "Salary total",
   creditTotal: "Credit total",
   gpay: "GPay",
   pos: "POS",

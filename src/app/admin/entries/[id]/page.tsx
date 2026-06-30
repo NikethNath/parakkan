@@ -21,6 +21,7 @@ export default async function AdminEntryDetail({
       employee: { select: { name: true, username: true } },
       oilLines: true,
       expenseLines: true,
+      salaryLines: true,
       creditLines: true,
       verifiedBy: { select: { name: true } },
       audits: {
@@ -61,6 +62,10 @@ export default async function AdminEntryDetail({
       amount: s(l.amount),
     })),
     expenses: entry.expenseLines.map((l) => ({
+      description: l.description,
+      amount: s(l.amount),
+    })),
+    salary: entry.salaryLines.map((l) => ({
       description: l.description,
       amount: s(l.amount),
     })),

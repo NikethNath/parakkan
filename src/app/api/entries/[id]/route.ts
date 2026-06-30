@@ -165,6 +165,7 @@ export async function PATCH(
   cmpNum("cashTotal", existing.cashTotal, c.cashTotal);
   cmpNum("oilTotal", existing.oilTotal, c.oilTotal);
   cmpNum("expensesTotal", existing.expensesTotal, c.expensesTotal);
+  cmpNum("salaryTotal", existing.salaryTotal, c.salaryTotal);
   cmpNum("creditTotal", existing.creditTotal, c.creditTotal);
   cmpNum("fuelExpected", existing.fuelExpected, c.fuelExpected);
   cmpNum("shortExcess", existing.shortExcess, c.shortExcess);
@@ -177,6 +178,7 @@ export async function PATCH(
     await prisma.$transaction(async (tx) => {
       await tx.oilLine.deleteMany({ where: { entryId: id } });
       await tx.expenseLine.deleteMany({ where: { entryId: id } });
+      await tx.salaryLine.deleteMany({ where: { entryId: id } });
       await tx.creditLine.deleteMany({ where: { entryId: id } });
 
       await tx.dailyEntry.update({
@@ -205,6 +207,7 @@ export async function PATCH(
           cashTotal: c.cashTotal,
           oilTotal: c.oilTotal,
           expensesTotal: c.expensesTotal,
+          salaryTotal: c.salaryTotal,
           creditTotal: c.creditTotal,
           grossLitres: c.grossLitres,
           netSalableLitres: c.netSalableLitres,
@@ -223,6 +226,12 @@ export async function PATCH(
           },
           expenseLines: {
             create: input.expenseLines.map((l) => ({
+              description: l.description,
+              amount: l.amount,
+            })),
+          },
+          salaryLines: {
+            create: input.salaryLines.map((l) => ({
               description: l.description,
               amount: l.amount,
             })),

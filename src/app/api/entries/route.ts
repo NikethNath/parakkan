@@ -67,6 +67,7 @@ export async function POST(req: Request) {
           cashTotal: c.cashTotal,
           oilTotal: c.oilTotal,
           expensesTotal: c.expensesTotal,
+          salaryTotal: c.salaryTotal,
           creditTotal: c.creditTotal,
           grossLitres: c.grossLitres,
           netSalableLitres: c.netSalableLitres,
@@ -86,6 +87,12 @@ export async function POST(req: Request) {
           },
           expenseLines: {
             create: input.expenseLines.map((l) => ({
+              description: l.description,
+              amount: l.amount,
+            })),
+          },
+          salaryLines: {
+            create: input.salaryLines.map((l) => ({
               description: l.description,
               amount: l.amount,
             })),
