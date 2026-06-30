@@ -69,6 +69,12 @@ export default async function MeterPage({
     map.set(d, row);
   }
   const rows = [...map.values()].sort((a, b) => b.date.localeCompare(a.date));
+  // Submission order is unreliable, so sort each product's readings ascending
+  // (MS and HSD independently) — N1 is the lowest, up to the highest.
+  for (const r of rows) {
+    r.ms.sort((a, b) => a - b);
+    r.hsd.sort((a, b) => a - b);
+  }
 
   const msCols = Array.from({ length: MS_NOZZLES }, (_, i) => i);
   const hsdCols = Array.from({ length: HSD_NOZZLES }, (_, i) => i);
