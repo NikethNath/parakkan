@@ -12,15 +12,37 @@ jobs:
     steps:
       - name: Pull + rebuild on the server
         uses: appleboy/ssh-action@v1.2.0
+        env:
+          # App secrets, sourced from GitHub → Settings → Secrets and variables →
+          # Actions. Forwarded to the droplet and written into ~/parakkan/.env so
+          # they never have to be hand-edited on the server.
+          CRIS_LOGIN_URL: ${{ secrets.CRIS_LOGIN_URL }}
+          CRIS_SAP_CODE: ${{ secrets.CRIS_SAP_CODE }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           command_timeout: 20m
+          envs: CRIS_LOGIN_URL,CRIS_SAP_CODE,CRON_SECRET
           script: |
             set -e
             cd ~/parakkan
             git pull --ff-only
+
+            # Upsert a KEY=value into .env (skips empty secrets so an unset one
+            # never clobbers an existing value). Secrets are masked in logs.
+            upsert() {
+              [ -z "$2" ] && return 0
+              touch .env
+              grep -v "^$1=" .env > .env.tmp 2>/dev/null || true
+              printf '%s=%s\n' "$1" "$2" >> .env.tmp
+              mv .env.tmp .env
+            }
+            upsert CRIS_LOGIN_URL "$CRIS_LOGIN_URL"
+            upsert CRIS_SAP_CODE "$CRIS_SAP_CODE"
+            upsert CRON_SECRET "$CRON_SECRET"
+
             docker compose -f docker-compose.prod.yml up -d --build
             docker image prune -f
             echo "Deployed at $(date)"
