@@ -4,12 +4,14 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 import { entryInputSchema, computeEntry, SHIFTS } from "@/lib/calc";
+import { syncAttendanceForEntry } from "@/lib/attendance";
 
 const metaSchema = z.object({
   businessDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),
   shift: z.enum(SHIFTS),
+  partnerId: z.number().int().positive().nullable().optional(),
 });
 
 function toDate(yyyyMmDd: string): Date {
@@ -35,11 +37,27 @@ export async function POST(req: Request) {
   const input = entry.data;
   const c = computeEntry(input);
 
+  // Optional partner (second person on the same DU) — must be another employee.
+  const partnerId = meta.data.partnerId ?? null;
+  if (partnerId != null) {
+    if (partnerId === user.uid) {
+      return NextResponse.json({ error: "Partner can't be the same person." }, { status: 400 });
+    }
+    const p = await prisma.user.findFirst({
+      where: { id: partnerId, role: "EMPLOYEE" },
+      select: { id: true },
+    });
+    if (!p) {
+      return NextResponse.json({ error: "Unknown partner." }, { status: 400 });
+    }
+  }
+
   try {
     const created = await prisma.$transaction(async (tx) => {
       const e = await tx.dailyEntry.create({
         data: {
           employeeId: user.uid,
+          partnerId,
           businessDate: toDate(meta.data.businessDate),
           shift: meta.data.shift,
           product: input.product,
@@ -106,23 +124,12 @@ export async function POST(req: Request) {
         },
       });
 
-      // Submitting a shift implies the employee worked it -> mark attendance.
-      await tx.attendance.upsert({
-        where: {
-          employeeId_date_shift: {
-            employeeId: user.uid,
-            date: toDate(meta.data.businessDate),
-            shift: meta.data.shift,
-          },
-        },
-        update: {},
-        create: {
-          employeeId: user.uid,
-          date: toDate(meta.data.businessDate),
-          shift: meta.data.shift,
-          status: "PRESENT",
-          source: "AUTO",
-        },
+      // Submitting a shift implies the employee (and any partner) worked it.
+      await syncAttendanceForEntry(tx, {
+        employeeId: user.uid,
+        partnerId,
+        date: toDate(meta.data.businessDate),
+        shift: meta.data.shift,
       });
 
       return e;

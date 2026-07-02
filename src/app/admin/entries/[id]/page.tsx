@@ -19,6 +19,7 @@ export default async function AdminEntryDetail({
     where: { id },
     include: {
       employee: { select: { name: true, username: true } },
+      partner: { select: { name: true } },
       oilLines: true,
       expenseLines: true,
       salaryLines: true,
@@ -32,6 +33,12 @@ export default async function AdminEntryDetail({
   });
   if (!entry) notFound();
 
+  const employees = await prisma.user.findMany({
+    where: { role: "EMPLOYEE", active: true, id: { not: entry.employeeId } },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  });
+
   const s = (v: unknown) => String(toNum(v));
 
   const initial: DailyEntryInitial = {
@@ -39,6 +46,7 @@ export default async function AdminEntryDetail({
       businessDate: isoDate(entry.businessDate),
       shift: entry.shift,
       product: entry.product,
+      partnerId: entry.partnerId ? String(entry.partnerId) : "",
       rate: s(entry.rate),
       n1Open: s(entry.n1Open),
       n1Close: s(entry.n1Close),
@@ -86,6 +94,9 @@ export default async function AdminEntryDetail({
           <div>
             <h1 className="text-lg font-bold text-foreground">
               {entry.employee.name}
+              {entry.partner && (
+                <span className="font-medium text-muted"> + {entry.partner.name}</span>
+              )}
             </h1>
             <p className="text-sm text-muted">
               {entry.businessDate.toLocaleDateString("en-IN", {
@@ -146,6 +157,7 @@ export default async function AdminEntryDetail({
         redirectTo="/admin"
         admin
         startLocked
+        employees={employees}
         deleteSlot={
           <DeleteEntryButton
             entryId={entry.id}

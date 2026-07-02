@@ -24,6 +24,12 @@ export default async function EmployeeEditSheet({
   // Once the admin verifies a sheet the employee can no longer change it.
   if (entry.status === "VERIFIED") redirect(`/employee/sheet/${id}`);
 
+  const employees = await prisma.user.findMany({
+    where: { role: "EMPLOYEE", active: true, id: { not: user.uid } },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  });
+
   const s = (v: unknown) => String(toNum(v));
 
   const initial: DailyEntryInitial = {
@@ -31,6 +37,7 @@ export default async function EmployeeEditSheet({
       businessDate: isoDate(entry.businessDate),
       shift: entry.shift,
       product: entry.product,
+      partnerId: entry.partnerId ? String(entry.partnerId) : "",
       rate: s(entry.rate),
       n1Open: s(entry.n1Open),
       n1Close: s(entry.n1Close),
@@ -64,6 +71,7 @@ export default async function EmployeeEditSheet({
         initial={initial}
         admin={false}
         redirectTo={`/employee/sheet/${id}`}
+        employees={employees}
       />
     </div>
   );

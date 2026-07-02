@@ -27,7 +27,10 @@ export default async function SubmissionsPage({
     where: { status: { not: "VERIFIED" } },
     orderBy: [{ businessDate: "desc" }, { id: "desc" }],
     take: 200,
-    include: { employee: { select: { name: true } } },
+    include: {
+      employee: { select: { name: true } },
+      partner: { select: { name: true } },
+    },
   });
 
   const entries = hasRange
@@ -36,7 +39,10 @@ export default async function SubmissionsPage({
           businessDate: { gte: new Date(lo + "T00:00:00.000Z"), lt: dayBoundsUTC(hi).end },
         },
         orderBy: [{ businessDate: "desc" }, { id: "desc" }],
-        include: { employee: { select: { name: true } } },
+        include: {
+      employee: { select: { name: true } },
+      partner: { select: { name: true } },
+    },
       })
     : [];
 
@@ -75,8 +81,8 @@ export default async function SubmissionsPage({
                           timeZone: "UTC",
                         })}
                       </span>{" "}
-                      · {e.shift === "MORNING" ? "Morning" : "Evening"} · {e.employee.name} ·{" "}
-                      {e.product}
+                      · {e.shift === "MORNING" ? "Morning" : "Evening"} · {e.employee.name}
+                      {e.partner ? ` + ${e.partner.name}` : ""} · {e.product}
                     </span>
                     <span className="flex items-center gap-2 whitespace-nowrap">
                       {lbl !== "BALANCED" && (
@@ -183,7 +189,10 @@ export default async function SubmissionsPage({
                       <td className="px-2 py-1.5">
                         {e.shift === "MORNING" ? "Morning" : "Evening"}
                       </td>
-                      <td className="px-2 py-1.5">{e.employee.name}</td>
+                      <td className="px-2 py-1.5">
+                        {e.employee.name}
+                        {e.partner && <span className="text-muted"> + {e.partner.name}</span>}
+                      </td>
                       <td className="px-2 py-1.5">{e.product}</td>
                       <td
                         className={

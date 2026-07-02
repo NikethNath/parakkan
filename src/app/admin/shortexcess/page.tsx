@@ -31,24 +31,44 @@ export default async function ShortExcessPage({
 
   const ready = !!selected && hasRange;
 
-  const rows = ready
+  // Sheets this person filled themselves…
+  const own = ready
     ? await prisma.dailyEntry.findMany({
         where: {
           employeeId: selected!.id,
+          businessDate: { gte: dayBoundsUTC(lo).start, lt: dayBoundsUTC(hi).end },
+        },
+        select: { shortExcess: true, partnerId: true },
+      })
+    : [];
+  // …and sheets where they were the partner on someone else's unit.
+  const partnered = ready
+    ? await prisma.dailyEntry.findMany({
+        where: {
+          partnerId: selected!.id,
           businessDate: { gte: dayBoundsUTC(lo).start, lt: dayBoundsUTC(hi).end },
         },
         select: { shortExcess: true },
       })
     : [];
 
+  // A person's share of a sheet is the full short/excess when they worked it
+  // solo, or half when it was shared with a partner.
+  const round2 = (n: number) => Math.round(n * 100) / 100;
   let excess = 0;
   let short = 0;
-  for (const r of rows) {
-    const se = toNum(r.shortExcess);
-    if (se > 0) excess += se;
-    else if (se < 0) short += -se;
-  }
-  const net = excess - short;
+  const addShare = (share: number) => {
+    if (share > 0) excess += share;
+    else if (share < 0) short += -share;
+  };
+  for (const r of own) addShare(r.partnerId ? toNum(r.shortExcess) / 2 : toNum(r.shortExcess));
+  for (const r of partnered) addShare(toNum(r.shortExcess) / 2);
+  excess = round2(excess);
+  short = round2(short);
+  const net = round2(excess - short);
+
+  const sheetCount = own.length + partnered.length;
+  const sharedCount = own.filter((r) => r.partnerId).length + partnered.length;
 
   return (
     <div className="space-y-4 pb-6">
@@ -105,11 +125,12 @@ export default async function ShortExcessPage({
               {selected!.name} · {dayLabel(lo)} – {dayLabel(hi)}
             </h2>
             <p className="text-xs text-muted">
-              {rows.length} sheet{rows.length === 1 ? "" : "s"}
+              {sheetCount} sheet{sheetCount === 1 ? "" : "s"}
+              {sharedCount > 0 ? ` · ${sharedCount} shared (split 50/50)` : ""}
             </p>
           </div>
 
-          {rows.length === 0 ? (
+          {sheetCount === 0 ? (
             <p className="py-6 text-center text-sm text-faint">
               No sheets for {selected!.name} in this period.
             </p>
@@ -125,9 +146,10 @@ export default async function ShortExcessPage({
             </div>
           )}
 
-          {rows.length > 0 && (
+          {sheetCount > 0 && (
             <p className="mt-3 text-xs text-muted">
               Net = excess − short. A net short is deducted, a net excess is added.
+              Sheets shared with a partner count only this person&apos;s half.
             </p>
           )}
         </section>

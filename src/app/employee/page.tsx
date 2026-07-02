@@ -11,7 +11,10 @@ export default async function EmployeeHome() {
     where: { employeeId: user.uid },
     orderBy: [{ businessDate: "desc" }, { id: "desc" }],
     take: 30,
-    include: { _count: { select: { audits: true } } },
+    include: {
+      partner: { select: { name: true } },
+      _count: { select: { audits: true } },
+    },
   });
 
   return (
@@ -51,6 +54,9 @@ export default async function EmployeeHome() {
                             month: "short",
                           })}{" "}
                           · {e.shift === "MORNING" ? "Morning" : "Evening"} · {e.product}
+                          {e.partner && (
+                            <span className="text-muted"> · 🤝 {e.partner.name}</span>
+                          )}
                         </p>
                         <p className="text-xs text-muted">
                           {e.status === "VERIFIED" ? "Verified by admin" : "Submitted"}

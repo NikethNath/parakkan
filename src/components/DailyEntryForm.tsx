@@ -16,6 +16,7 @@ type FormState = {
   businessDate: string;
   shift: (typeof SHIFTS)[number];
   product: (typeof PRODUCTS)[number];
+  partnerId: string; // "" = none; else the partner employee's id
   rate: string;
   n1Open: string;
   n1Close: string;
@@ -43,6 +44,7 @@ const emptyForm = (): FormState => {
   // evening from 6pm through to 3am — so staff usually don't have to touch it.
   shift: h >= 18 || h < 3 ? "EVENING" : "MORNING",
   product: "MS",
+  partnerId: "",
   rate: "",
   n1Open: "",
   n1Close: "",
@@ -86,6 +88,7 @@ export default function DailyEntryForm({
   admin = false,
   startLocked = false,
   deleteSlot,
+  employees = [],
 }: {
   mode?: "create" | "edit";
   entryId?: number;
@@ -94,6 +97,7 @@ export default function DailyEntryForm({
   admin?: boolean;
   startLocked?: boolean;
   deleteSlot?: React.ReactNode;
+  employees?: { id: number; name: string }[];
 } = {}) {
   const router = useRouter();
   const [form, setForm] = useState<FormState>(() => ({
@@ -214,6 +218,7 @@ export default function DailyEntryForm({
       creditLines: credit
         .filter((l) => l.customer.trim() && n(l.amount) > 0)
         .map((l) => ({ customer: l.customer.trim(), amount: l.amount })),
+      partnerId: form.partnerId ? Number(form.partnerId) : null,
     };
     try {
       const res = await fetch(
@@ -341,6 +346,30 @@ export default function DailyEntryForm({
             />
           </Field>
         </div>
+        {employees.length > 0 && (
+          <div className="mt-3">
+            <Field label="Partner (optional) — second person on this unit">
+              <select
+                value={form.partnerId}
+                onChange={(e) => set("partnerId", e.target.value)}
+                className={inputCls}
+              >
+                <option value="">— none —</option>
+                {employees.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.name}
+                  </option>
+                ))}
+              </select>
+              {form.partnerId && (
+                <span className="mt-1 block text-xs text-faint">
+                  Attendance is marked for both, and this sheet&apos;s short/excess is
+                  split 50/50.
+                </span>
+              )}
+            </Field>
+          </div>
+        )}
       </Section>
 
       {/* Nozzle readings */}

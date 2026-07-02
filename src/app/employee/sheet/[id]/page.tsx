@@ -20,6 +20,7 @@ export default async function EmployeeSheetDetail({
   const entry = await prisma.dailyEntry.findFirst({
     where: { id, employeeId: user.uid },
     include: {
+      partner: { select: { name: true } },
       oilLines: true,
       expenseLines: true,
       salaryLines: true,
@@ -55,6 +56,17 @@ export default async function EmployeeSheetDetail({
                 · {entry.shift === "MORNING" ? "Morning" : "Evening"} · {entry.product}
               </p>
               <p className="text-xs text-muted">Rate {inr(toNum(entry.rate))}/L</p>
+              {entry.partner && (
+                <p className="mt-0.5 text-xs text-muted">
+                  🤝 Shared with {entry.partner.name}
+                  {lbl !== "BALANCED" && (
+                    <>
+                      {" "}
+                      · your half: {inr(Math.abs(se) / 2)} {lbl === "SHORT" ? "short" : "excess"}
+                    </>
+                  )}
+                </p>
+              )}
             </div>
             <span
               className={

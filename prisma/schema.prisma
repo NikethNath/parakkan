@@ -59,6 +59,7 @@ model User {
   updatedAt     DateTime @updatedAt
 
   entries          DailyEntry[]    @relation("EmployeeEntries")
+  partnerEntries   DailyEntry[]    @relation("PartnerEntries")
   verifiedEntries  DailyEntry[]    @relation("VerifiedBy")
   attendance       Attendance[]
   audits           EntryAudit[]
@@ -71,6 +72,11 @@ model DailyEntry {
   id           Int      @id @default(autoincrement())
   employee     User     @relation("EmployeeEntries", fields: [employeeId], references: [id])
   employeeId   Int
+  // Optional second person who worked the same dispensing unit this shift. They
+  // also get attendance, and this sheet's short/excess is split 50/50 between
+  // the two for payroll (the stored shortExcess stays the full till difference).
+  partner      User?    @relation("PartnerEntries", fields: [partnerId], references: [id])
+  partnerId    Int?
   businessDate DateTime @db.Date
   shift        Shift
   product      Product

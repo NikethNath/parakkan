@@ -5,11 +5,13 @@ import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 import { entryInputSchema, computeEntry, SHIFTS } from "@/lib/calc";
 import { toNum, isoDate } from "@/lib/format";
+import { syncAttendanceForEntry, syncAttendanceForUpdate } from "@/lib/attendance";
 
 const metaSchema = z.object({
   businessDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   shift: z.enum(SHIFTS),
   verify: z.boolean().optional(),
+  partnerId: z.number().int().positive().nullable().optional(),
 });
 
 const toDate = (s: string) => new Date(`${s}T00:00:00.000Z`);
@@ -59,26 +61,15 @@ export async function DELETE(
     await prisma.$transaction(async (tx) => {
       // Cascades to oil/expense/credit lines and the audit trail.
       await tx.dailyEntry.delete({ where: { id } });
-      // Drop the attendance this submission auto-marked, so a test/bogus entry
-      // doesn't leave the staff counted "present" — unless another submission by
-      // the same employee still covers that day/shift. A manual mark is left alone.
-      const stillCovered = await tx.dailyEntry.count({
-        where: {
-          employeeId: existing.employeeId,
-          businessDate: existing.businessDate,
-          shift: existing.shift,
-        },
+      // Recompute attendance for the employee and any partner — drops the AUTO
+      // mark unless another sheet still covers that day/shift (a MANUAL mark is
+      // left alone).
+      await syncAttendanceForEntry(tx, {
+        employeeId: existing.employeeId,
+        partnerId: existing.partnerId,
+        date: existing.businessDate,
+        shift: existing.shift,
       });
-      if (stillCovered === 0) {
-        await tx.attendance.deleteMany({
-          where: {
-            employeeId: existing.employeeId,
-            date: existing.businessDate,
-            shift: existing.shift,
-            source: "AUTO",
-          },
-        });
-      }
     });
     return NextResponse.json({ ok: true, id });
   } catch (err) {
@@ -145,6 +136,21 @@ export async function PATCH(
   // it's pinned to whatever it already was. Admins can still re-date a sheet.
   const businessDate = isAdmin ? meta.data.businessDate : isoDate(existing.businessDate);
 
+  // Optional partner (second person on the DU). Employees may set/clear it too.
+  const partnerId = meta.data.partnerId ?? null;
+  if (partnerId != null) {
+    if (partnerId === existing.employeeId) {
+      return NextResponse.json({ error: "Partner can't be the same person." }, { status: 400 });
+    }
+    const p = await prisma.user.findFirst({
+      where: { id: partnerId, role: "EMPLOYEE" },
+      select: { id: true },
+    });
+    if (!p) {
+      return NextResponse.json({ error: "Unknown partner." }, { status: 400 });
+    }
+  }
+
   // --- Build the audit diff (employee-original values are preserved) ---------
   const audits: { field: string; oldValue: string; newValue: string }[] = [];
   const ex = existing as unknown as Record<string, unknown>;
@@ -170,6 +176,26 @@ export async function PATCH(
   cmpNum("fuelExpected", existing.fuelExpected, c.fuelExpected);
   cmpNum("shortExcess", existing.shortExcess, c.shortExcess);
 
+  // Partner change — logged for admins with names (it moves the 50/50 split).
+  if (isAdmin && (existing.partnerId ?? null) !== partnerId) {
+    const ids = [existing.partnerId, partnerId].filter((x): x is number => x != null);
+    const names = ids.length
+      ? Object.fromEntries(
+          (
+            await prisma.user.findMany({
+              where: { id: { in: ids } },
+              select: { id: true, name: true },
+            })
+          ).map((u) => [u.id, u.name] as const),
+        )
+      : ({} as Record<number, string>);
+    audits.push({
+      field: "partner",
+      oldValue: existing.partnerId ? names[existing.partnerId] ?? String(existing.partnerId) : "none",
+      newValue: partnerId ? names[partnerId] ?? String(partnerId) : "none",
+    });
+  }
+
   // Only an admin can verify (and thereby lock) a sheet; an employee's save
   // always leaves it SUBMITTED so it stays editable until the admin checks it.
   const verify = isAdmin ? (meta.data.verify ?? existing.status === "VERIFIED") : false;
@@ -187,6 +213,7 @@ export async function PATCH(
           businessDate: toDate(businessDate),
           shift: meta.data.shift,
           product: input.product,
+          partnerId,
           rate: input.rate,
           n1Open: input.n1Open,
           n1Close: input.n1Close,
@@ -253,50 +280,24 @@ export async function PATCH(
         });
       }
 
-      // Keep attendance consistent with the (possibly changed) date/shift.
-      await tx.attendance.upsert({
-        where: {
-          employeeId_date_shift: {
-            employeeId: existing.employeeId,
-            date: toDate(businessDate),
-            shift: meta.data.shift,
-          },
-        },
-        update: {},
-        create: {
+      // Recompute attendance for everyone this change could touch: the employee
+      // and any partner, on both the new and the previous day/shift (so a moved
+      // date, a moved shift, or a swapped/removed partner all self-correct).
+      await syncAttendanceForUpdate(
+        tx,
+        {
           employeeId: existing.employeeId,
+          partnerId: existing.partnerId,
+          date: existing.businessDate,
+          shift: existing.shift,
+        },
+        {
+          employeeId: existing.employeeId,
+          partnerId,
           date: toDate(businessDate),
           shift: meta.data.shift,
-          status: "PRESENT",
-          source: "AUTO",
         },
-      });
-
-      // If the date or shift moved, drop the attendance this submission had
-      // auto-marked on its previous day/shift — unless another submission by
-      // the same employee still covers it (e.g. MS + HSD on the same shift).
-      const movedDayOrShift =
-        isoDate(existing.businessDate) !== businessDate ||
-        existing.shift !== meta.data.shift;
-      if (movedDayOrShift) {
-        const stillCovered = await tx.dailyEntry.count({
-          where: {
-            employeeId: existing.employeeId,
-            businessDate: existing.businessDate,
-            shift: existing.shift,
-          },
-        });
-        if (stillCovered === 0) {
-          await tx.attendance.deleteMany({
-            where: {
-              employeeId: existing.employeeId,
-              date: existing.businessDate,
-              shift: existing.shift,
-              source: "AUTO",
-            },
-          });
-        }
-      }
+      );
     });
 
     return NextResponse.json({
