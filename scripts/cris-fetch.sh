@@ -1,9 +1,11 @@
 #!/bin/sh
-# Daily CRIS auto-fetch. Calls the in-app cron endpoint, which logs into CRIS
-# with the stored credentials, downloads the Daily Sales Report, and caches it.
-# The `cron` service in docker-compose.prod.yml runs this at 03:00 IST (when no
-# one is logged into CRIS, which allows only one active session); it's also safe
-# to run by hand. Settings come from the environment first, falling back to .env:
+# Hourly CRIS auto-fetch. Calls the in-app cron endpoint, which logs into CRIS
+# (via the pre-authenticated dealer link, or stored credentials), downloads the
+# Daily Sales Report, and caches it. The `cron` service in docker-compose.prod.yml
+# runs this at the top of every hour; it's also safe to run by hand. CRIS allows
+# only one active session, so a run that overlaps your own CRIS login may fail
+# that hour (it logs out cleanly and the next hour retries). Settings come from
+# the environment first, falling back to .env:
 #   CRON_SECRET    bearer token the endpoint requires
 #   CRIS_CRON_URL  full endpoint URL (defaults to https://$DOMAIN/api/cris/cron-fetch)
 #   CRIS_LOG       log destination (defaults to <project>/cris-fetch.log)

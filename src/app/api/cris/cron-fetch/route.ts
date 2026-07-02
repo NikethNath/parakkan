@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getCrisCredentials } from "@/lib/crisCreds";
+import { getCrisLogin } from "@/lib/crisCreds";
 import { fetchDailySalesReport } from "@/services/cris";
 import { storeCrisReport } from "@/services/crisStore";
 import { isoDate } from "@/lib/format";
@@ -32,8 +32,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const creds = await getCrisCredentials();
-  if (!creds) {
+  const login = await getCrisLogin();
+  if (!login) {
     return NextResponse.json({ error: "CRIS login not configured" }, { status: 400 });
   }
 
@@ -42,13 +42,7 @@ export async function POST(req: Request) {
   const fromDate = maxAgg._max.businessDate ? isoDate(maxAgg._max.businessDate) : istDate(-7);
   const toDate = istDate(0);
 
-  const result = await fetchDailySalesReport({
-    username: creds.username,
-    password: creds.password,
-    fromDate,
-    toDate,
-    sapCode: creds.username, // RO SAP code == CRIS user id for this dealer
-  });
+  const result = await fetchDailySalesReport({ ...login, fromDate, toDate });
 
   if (!result.ok || !result.report) {
     return NextResponse.json(

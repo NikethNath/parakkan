@@ -33,13 +33,19 @@ services:
       ADMIN_USERNAME: ${ADMIN_USERNAME}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       CHROME_PATH: /usr/bin/chromium
+      # CRIS auto-fetch: pre-authenticated dealer link + RO SAP code (secrets).
+      CRIS_LOGIN_URL: ${CRIS_LOGIN_URL}
+      CRIS_SAP_CODE: ${CRIS_SAP_CODE}
     expose:
       - "3000"
 
-  # Nightly CRIS auto-fetch. busybox crond fires cris-fetch.sh at 03:00 IST,
-  # which POSTs the token-protected /api/cris/cron-fetch endpoint on the app
-  # (reached directly over the internal network). Logs to `docker compose logs
-  # cron`. No-ops with a logged warning if CRON_SECRET is unset.
+  # Hourly CRIS auto-fetch. busybox crond fires cris-fetch.sh at the top of every
+  # hour, which POSTs the token-protected /api/cris/cron-fetch endpoint on the app
+  # (reached directly over the internal network). Each run refreshes today's rows
+  # and backfills any missed days. Logs to `docker compose logs cron`. No-ops with
+  # a logged warning if CRON_SECRET is unset. NOTE: CRIS allows a single active
+  # session — a run that coincides with you being logged into CRIS may fail that
+  # hour; it logs out cleanly and the next hour retries.
   cron:
     image: alpine:3.20
     restart: unless-stopped
@@ -59,8 +65,8 @@ services:
         set -e
         apk add --no-cache curl tzdata >/dev/null
         mkdir -p /etc/crontabs
-        printf '0 3 * * * /scripts/cris-fetch.sh\n' > /etc/crontabs/root
-        echo "[cron] CRIS auto-fetch scheduled for 03:00 Asia/Kolkata"
+        printf '0 * * * * /scripts/cris-fetch.sh\n' > /etc/crontabs/root
+        echo "[cron] CRIS auto-fetch scheduled hourly (top of every hour)"
         exec crond -f -l 8 -c /etc/crontabs
 
   caddy:

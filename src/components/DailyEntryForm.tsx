@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FocusEvent, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FocusEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   computeEntry,
@@ -118,6 +118,16 @@ export default function DailyEntryForm({
   // day (cross-month payroll impact). The server enforces this too.
   const lockDate = mode === "edit" && !admin;
 
+  // Tapping "Edit" unlocks the form; React then swaps a Save/Submit button into
+  // the same spot. On touch screens the trailing ghost-click can land on that new
+  // button and fire a submit. Record the unlock time so onFormSubmit can ignore a
+  // submit that arrives immediately after (see the guard there).
+  const unlockedAt = useRef(0);
+  function unlock() {
+    unlockedAt.current = Date.now();
+    setLocked(false);
+  }
+
   const set = (k: keyof FormState, v: string) =>
     setForm((f) => ({ ...f, [k]: v }));
 
@@ -157,6 +167,9 @@ export default function DailyEntryForm({
   function onFormSubmit(e: FormEvent) {
     e.preventDefault();
     if (locked) return; // safety — Save is hidden while locked
+    // Swallow the touch-screen ghost-click that immediately follows tapping
+    // "Edit" (which just unlocked and put a Save button under the finger).
+    if (Date.now() - unlockedAt.current < 600) return;
     if (needsConfirm) {
       setConfirming(true); // show the review step instead of submitting outright
       return;
@@ -250,7 +263,7 @@ export default function DailyEntryForm({
               <span>🔒 View only — values are locked so nothing changes by accident.</span>
               <button
                 type="button"
-                onClick={() => setLocked(false)}
+                onClick={unlock}
                 className="rounded-lg bg-accent px-4 py-1.5 font-semibold text-white hover:bg-accent-strong"
               >
                 Edit
@@ -642,7 +655,7 @@ export default function DailyEntryForm({
             {locked ? (
               <button
                 type="button"
-                onClick={() => setLocked(false)}
+                onClick={unlock}
                 className="rounded-lg bg-accent px-5 py-2.5 font-semibold text-white transition hover:bg-accent-strong"
               >
                 Edit

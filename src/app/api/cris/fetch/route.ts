@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSessionUser } from "@/lib/auth";
-import { getCrisCredentials } from "@/lib/crisCreds";
+import { getCrisLogin } from "@/lib/crisCreds";
 import { fetchDailySalesReport } from "@/services/cris";
 import { storeCrisReport } from "@/services/crisStore";
 import { getCrisFetchState } from "@/services/crisFetchState";
@@ -42,8 +42,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Valid From/To dates required" }, { status: 400 });
   }
 
-  const creds = await getCrisCredentials();
-  if (!creds) {
+  const login = await getCrisLogin();
+  if (!login) {
     return NextResponse.json({ error: "Set your CRIS login first (above)." }, { status: 400 });
   }
 
@@ -58,19 +58,12 @@ export async function POST(req: Request) {
   state.result = null;
 
   const { fromDate, toDate } = parsed.data;
-  const { username, password } = creds;
 
   // Fire-and-forget: the long Playwright run continues after we respond. The
   // process is a single long-lived Node server (next start), so this is safe.
   void (async () => {
     try {
-      const result = await fetchDailySalesReport({
-        username,
-        password,
-        fromDate,
-        toDate,
-        sapCode: username, // RO SAP code == CRIS user id for this dealer
-      });
+      const result = await fetchDailySalesReport({ ...login, fromDate, toDate });
       if (result.ok && result.report) {
         const imported = await storeCrisReport(result.report);
         const days = new Set(result.report.rows.map((r) => r.businessDate)).size;

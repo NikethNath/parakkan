@@ -135,7 +135,9 @@ export default function CrisFetchForm({
         </button>
       </div>
       {!configured && (
-        <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">Save your CRIS login above first.</p>
+        <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+          CRIS login isn&apos;t configured — set <code>CRIS_LOGIN_URL</code> in the server env.
+        </p>
       )}
       {msg && <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-300">{msg}</p>}
       {err && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{err}</p>}

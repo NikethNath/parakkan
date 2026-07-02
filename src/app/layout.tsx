@@ -1,9 +1,21 @@
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
+import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 
 export const metadata: Metadata = {
   title: "Parakkan Petroleum — Daily Collection",
   description: "HPCL outlet daily collection & reconciliation",
+  applicationName: "Parakkan Petroleum",
+  // Lets iPhones add it to the home screen and open it fullscreen.
+  appleWebApp: {
+    capable: true,
+    title: "Parakkan",
+    statusBarStyle: "default",
+  },
+  icons: {
+    icon: "/icons/icon-192.png",
+    apple: "/icons/apple-icon-180.png",
+  },
 };
 
 // `resizes-content` makes the on-screen keyboard shrink the layout viewport so a
@@ -12,6 +24,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   interactiveWidget: "resizes-content",
+  themeColor: "#4f46e5",
 };
 
 // Sets the theme class before paint to avoid a flash of the wrong theme.
@@ -34,7 +47,10 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body className="min-h-screen antialiased">{children}</body>
+      <body className="min-h-screen antialiased">
+        <ServiceWorkerRegister />
+        {children}
+      </body>
     </html>
   );
 }

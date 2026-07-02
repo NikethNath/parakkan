@@ -34,8 +34,11 @@ function chromePath(): string | undefined {
 }
 
 export interface FetchOpts {
-  username: string;
-  password: string;
+  // Preferred: a pre-authenticated dealer link (dealerlogin?ro=…) that signs in
+  // with no username/password form. If absent, falls back to username/password.
+  loginUrl?: string;
+  username?: string;
+  password?: string;
   fromDate: string; // YYYY-MM-DD
   toDate: string; // YYYY-MM-DD
   sapCode?: string;
@@ -61,44 +64,81 @@ export async function fetchDailySalesReport(opts: FetchOpts): Promise<FetchResul
     args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
   });
   let step = "login";
+  let outerPage: Page | null = null;
+  let loggedIn = false;
   try {
     const ctx = await browser.newContext({
       viewport: { width: 1500, height: 1000 },
       acceptDownloads: true,
     });
     const page = await ctx.newPage();
+    outerPage = page; // kept for a best-effort logout in `finally`
 
-    // 1) Login. The portal can be slow to serve the login page, and the
-    //    dashboard takes several seconds to render after submit.
-    let loaded = false;
-    for (let a = 1; a <= 3 && !loaded; a++) {
-      try {
-        await page.goto(`${BASE}/login`, { waitUntil: "commit", timeout: 120000 });
-        await page.waitForSelector("#strUserId", { timeout: 60000 });
-        loaded = true;
-      } catch {
-        await page.waitForTimeout(2500);
+    // 1) Login. Two ways in: a pre-authenticated dealer link (preferred — no
+    //    form), or the username/password form. Either way the dashboard takes
+    //    several seconds to render before the report route works.
+    if (opts.loginUrl) {
+      let opened = false;
+      for (let a = 1; a <= 3 && !opened; a++) {
+        try {
+          await page.goto(opts.loginUrl, { waitUntil: "commit", timeout: 120000 });
+          opened = true;
+        } catch {
+          await page.waitForTimeout(2500);
+        }
+      }
+      if (!opened) {
+        return { ok: false, step, error: "Could not open the CRIS dealer login link (network/timeout)." };
+      }
+      // The link redirects to the dashboard once the session is set.
+      await page
+        .waitForFunction(() => !/\/(dealerlogin|login)\b/.test(location.pathname), { timeout: 60000 })
+        .catch(() => {});
+      await page.waitForTimeout(15000);
+      if (/\/(dealerlogin|login)\b/.test(page.url())) {
+        return {
+          ok: false,
+          step,
+          error:
+            "Dealer login link didn't sign in — it may have expired, or another CRIS session is active. Log out of CRIS and retry.",
+        };
+      }
+    } else {
+      let loaded = false;
+      for (let a = 1; a <= 3 && !loaded; a++) {
+        try {
+          await page.goto(`${BASE}/login`, { waitUntil: "commit", timeout: 120000 });
+          await page.waitForSelector("#strUserId", { timeout: 60000 });
+          loaded = true;
+        } catch {
+          await page.waitForTimeout(2500);
+        }
+      }
+      if (!loaded) {
+        return { ok: false, step, error: "Could not load the CRIS login page (network/timeout)." };
+      }
+      if (!opts.username || !opts.password) {
+        return { ok: false, step, error: "No CRIS login configured (dealer link or username/password)." };
+      }
+      await page.waitForTimeout(2000);
+      await page.fill("#strUserId", opts.username);
+      await page.fill("#password", opts.password);
+      await page.click("#submitbtn");
+      await page
+        .waitForFunction(() => !location.pathname.endsWith("/login"), { timeout: 45000 })
+        .catch(() => {});
+      await page.waitForTimeout(15000); // CRIS dashboard is slow to come up after login
+      if (/\/login/.test(page.url())) {
+        return {
+          ok: false,
+          step,
+          error:
+            "Login failed — wrong credentials, or another CRIS session is active (single-session). Log out of CRIS and retry in a few minutes.",
+        };
       }
     }
-    if (!loaded) {
-      return { ok: false, step, error: "Could not load the CRIS login page (network/timeout)." };
-    }
-    await page.waitForTimeout(2000);
-    await page.fill("#strUserId", opts.username);
-    await page.fill("#password", opts.password);
-    await page.click("#submitbtn");
-    await page
-      .waitForFunction(() => !location.pathname.endsWith("/login"), { timeout: 45000 })
-      .catch(() => {});
-    await page.waitForTimeout(15000); // CRIS dashboard is slow to come up after login
-    if (/\/login/.test(page.url())) {
-      return {
-        ok: false,
-        step,
-        error:
-          "Login failed — wrong credentials, or another CRIS session is active (single-session). Log out of CRIS and retry in a few minutes.",
-      };
-    }
+    // Past both login branches (each returns on failure) → we're signed in.
+    loggedIn = true;
 
     // 2) Open the Daily Sales Report — the filter modal auto-opens.
     step = "open-report";
@@ -164,26 +204,29 @@ export async function fetchDailySalesReport(opts: FetchOpts): Promise<FetchResul
       return { ok: false, step, error: "Downloaded report had no MS/HSD rows." };
     }
 
-    // 6) Log out (important — CRIS allows only one active session).
-    step = "logout";
-    await logout(page).catch(() => {});
-
     return { ok: true, report };
   } catch (e) {
     return { ok: false, step, error: e instanceof Error ? e.message : "Unknown error" };
   } finally {
+    // Always log out (even on failure) — CRIS allows a single active session, so
+    // a dangling session would block the next hourly run and your own login.
+    if (outerPage && loggedIn) await logout(outerPage).catch(() => {});
     await browser.close().catch(() => {});
   }
 }
 
 async function downloadXls(page: Page): Promise<Buffer | null> {
+  const ctx = page.context();
   // The download control is a round icon at the top-right of the grid. Clicking
-  // it reveals XLS/PDF buttons ~5s later; we pick XLS.
+  // it opens a small menu with XLS/PDF options.
   await page.locator("span.download-icon").click().catch(() => {});
-  await page.waitForTimeout(5000);
+  const xls = page.locator("div.download-xls");
+  await xls.waitFor({ state: "visible", timeout: 15000 }).catch(() => {});
+  // CRIS emits the download on the browser context, not this exact page, so a
+  // page-level wait misses it. Wait at the context level.
   const [download] = await Promise.all([
-    page.waitForEvent("download", { timeout: 30000 }).catch(() => null),
-    page.locator("div.download-xls").click().catch(() => {}),
+    ctx.waitForEvent("download", { timeout: 30000 }).catch(() => null),
+    xls.click().catch(() => {}),
   ]);
   if (!download) return null;
 
