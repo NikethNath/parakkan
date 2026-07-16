@@ -108,6 +108,16 @@ export const entryInputSchema = z
         path: ["testLitres"],
         message: "Test litres cannot exceed litres dispensed",
       });
+  })
+  .transform((v) => {
+    // Staff sometimes swap the opening/closing readings — a totalizer only
+    // counts up, so store them normalized (opening = smaller, closing =
+    // larger) and downstream views can trust the order.
+    const [n1Open, n1Close] =
+      v.n1Open > v.n1Close ? [v.n1Close, v.n1Open] : [v.n1Open, v.n1Close];
+    const [n2Open, n2Close] =
+      v.n2Open > v.n2Close ? [v.n2Close, v.n2Open] : [v.n2Open, v.n2Close];
+    return { ...v, n1Open, n1Close, n2Open, n2Close };
   });
 
 export interface OilLine {

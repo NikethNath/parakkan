@@ -141,6 +141,23 @@ describe("entryInputSchema validation", () => {
     expect(r.success).toBe(true);
   });
 
+  it("normalizes swapped readings so opening < closing on each nozzle", () => {
+    const r = entryInputSchema.safeParse({
+      ...base,
+      n1Open: 1500,
+      n1Close: 1000, // swapped
+      n2Open: 2000,
+      n2Close: 2300, // already correct
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.n1Open).toBe(1000);
+      expect(r.data.n1Close).toBe(1500);
+      expect(r.data.n2Open).toBe(2000);
+      expect(r.data.n2Close).toBe(2300);
+    }
+  });
+
   it("rejects test litres exceeding litres dispensed", () => {
     const r = entryInputSchema.safeParse({ ...base, testLitres: 10000 });
     expect(r.success).toBe(false);

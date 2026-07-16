@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 type Row = { date: string; cris: number | null; staff: number };
-const TOL = 1;
+const TOL = 0.1;
 const fmtL = (n: number) => `${n.toFixed(2)} L`;
 
 export default function CrisCompare({ ms, hsd }: { ms: Row[]; hsd: Row[] }) {

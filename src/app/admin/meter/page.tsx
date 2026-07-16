@@ -1,8 +1,8 @@
-import React from "react";
 import { prisma } from "@/lib/db";
 import { crisStatus } from "@/lib/crisCreds";
 import { isoDate, istToday, dayBoundsUTC, dayLabel, toNum } from "@/lib/format";
 import AutoSubmitDate from "@/components/AutoSubmitDate";
+import AutoSubmitSelect from "@/components/AutoSubmitSelect";
 import CrisMeterFetchForm from "@/components/CrisMeterFetchForm";
 
 const isDate = (s?: string) => /^\d{4}-\d{2}-\d{2}$/.test(s ?? "");
@@ -27,13 +27,14 @@ const fmt = (n: number | undefined) =>
     : n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /** Subscript under a staff reading: the CRIS official totalizer for the same
- *  (sorted) position — green when it matches, red when it differs. */
+ *  (sorted) position — green when it matches (within 0.05), red when it's off
+ *  by 0.05 or more. */
 function CrisSub({ staff, cris }: { staff?: number; cris?: number }) {
   if (cris === undefined) return null;
   const cls =
     staff === undefined
       ? "text-faint"
-      : Math.abs(staff - cris) < 0.01
+      : Math.abs(staff - cris) < 0.05
         ? "text-emerald-600 dark:text-emerald-400"
         : "text-red-600 dark:text-red-400";
   return <div className={`text-[10px] leading-tight tabular-nums ${cls}`}>{fmt(cris)}</div>;
@@ -54,10 +55,12 @@ const pickClosing = (open: number, close: number) => Math.max(open, close);
 export default async function MeterPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; view?: string }>;
 }) {
   const sp = await searchParams;
   const today = istToday();
+  // Which reading to show: day openings (default) or day closings.
+  const view: keyof Side = sp.view === "close" ? "close" : "open";
   // No default range — pick a start and end date to load the readings.
   const hasRange = isDate(sp.from) && isDate(sp.to);
   const fromRaw = isDate(sp.from) ? sp.from! : "";
@@ -171,6 +174,17 @@ export default async function MeterPage({
             className="rounded-lg border border-border px-3 py-1.5"
           />
         </label>
+        <label className="text-sm">
+          <span className="mb-1 block font-medium text-foreground">Reading</span>
+          <AutoSubmitSelect
+            name="view"
+            defaultValue={view}
+            className="rounded-lg border border-border px-3 py-1.5"
+          >
+            <option value="open">Opening</option>
+            <option value="close">Closing</option>
+          </AutoSubmitSelect>
+        </label>
       </form>
 
       <CrisMeterFetchForm configured={configured} />
@@ -183,10 +197,11 @@ export default async function MeterPage({
         <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
           <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
-              Meter readings · {dayLabel(lo)} – {dayLabel(hi)}
+              {view === "open" ? "Opening" : "Closing"} meter readings · {dayLabel(lo)} –{" "}
+              {dayLabel(hi)}
             </h2>
             <p className="text-xs text-muted">
-              Open = morning sheets · Close = evening sheets · {rows.length} day
+              From the {view === "open" ? "morning" : "evening"} sheets · {rows.length} day
               {rows.length === 1 ? "" : "s"}
             </p>
           </div>
@@ -208,7 +223,7 @@ export default async function MeterPage({
               <table className="w-full text-sm">
                 <thead className="text-muted">
                   <tr>
-                    <th colSpan={2} className="px-2 py-1" />
+                    <th className="px-2 py-1" />
                     <th
                       colSpan={MS_NOZZLES}
                       className="border-b border-border px-2 py-1 text-center font-semibold text-foreground"
@@ -224,7 +239,6 @@ export default async function MeterPage({
                   </tr>
                   <tr className="text-right">
                     <th className="px-2 py-1.5 text-left font-medium">Date</th>
-                    <th className="px-2 py-1.5" />
                     {msCols.map((i) => (
                       <th key={`msh${i}`} className="px-2 py-1.5 font-medium">
                         N{i + 1}
@@ -242,66 +256,32 @@ export default async function MeterPage({
                 </thead>
                 <tbody>
                   {rows.map((r) => (
-                    <React.Fragment key={r.date}>
-                      <tr className="border-t border-border">
+                    <tr key={r.date} className="border-t border-border">
+                      <td className="whitespace-nowrap px-2 py-1.5 align-top text-muted">
+                        {dayLabel(r.date)}
+                      </td>
+                      {msCols.map((i) => (
                         <td
-                          rowSpan={2}
-                          className="whitespace-nowrap px-2 py-1.5 align-top text-muted"
+                          key={`ms${i}`}
+                          className="px-2 py-1.5 text-right tabular-nums text-foreground"
                         >
-                          {dayLabel(r.date)}
+                          {fmt(r.ms[view][i])}
+                          <CrisSub staff={r.ms[view][i]} cris={r.cris?.ms[view][i]} />
                         </td>
-                        <td className="px-2 py-1.5 text-[10px] uppercase tracking-wide text-faint">
-                          Open
+                      ))}
+                      {hsdCols.map((i) => (
+                        <td
+                          key={`hsd${i}`}
+                          className={
+                            "px-2 py-1.5 text-right tabular-nums text-foreground" +
+                            (i === 0 ? " border-l border-border" : "")
+                          }
+                        >
+                          {fmt(r.hsd[view][i])}
+                          <CrisSub staff={r.hsd[view][i]} cris={r.cris?.hsd[view][i]} />
                         </td>
-                        {msCols.map((i) => (
-                          <td
-                            key={`mso${i}`}
-                            className="px-2 py-1.5 text-right tabular-nums text-foreground"
-                          >
-                            {fmt(r.ms.open[i])}
-                            <CrisSub staff={r.ms.open[i]} cris={r.cris?.ms.open[i]} />
-                          </td>
-                        ))}
-                        {hsdCols.map((i) => (
-                          <td
-                            key={`hsdo${i}`}
-                            className={
-                              "px-2 py-1.5 text-right tabular-nums text-foreground" +
-                              (i === 0 ? " border-l border-border" : "")
-                            }
-                          >
-                            {fmt(r.hsd.open[i])}
-                            <CrisSub staff={r.hsd.open[i]} cris={r.cris?.hsd.open[i]} />
-                          </td>
-                        ))}
-                      </tr>
-                      <tr>
-                        <td className="px-2 py-1.5 text-[10px] uppercase tracking-wide text-faint">
-                          Close
-                        </td>
-                        {msCols.map((i) => (
-                          <td
-                            key={`msc${i}`}
-                            className="px-2 py-1.5 text-right tabular-nums text-foreground"
-                          >
-                            {fmt(r.ms.close[i])}
-                            <CrisSub staff={r.ms.close[i]} cris={r.cris?.ms.close[i]} />
-                          </td>
-                        ))}
-                        {hsdCols.map((i) => (
-                          <td
-                            key={`hsdc${i}`}
-                            className={
-                              "px-2 py-1.5 text-right tabular-nums text-foreground" +
-                              (i === 0 ? " border-l border-border" : "")
-                            }
-                          >
-                            {fmt(r.hsd.close[i])}
-                            <CrisSub staff={r.hsd.close[i]} cris={r.cris?.hsd.close[i]} />
-                          </td>
-                        ))}
-                      </tr>
-                    </React.Fragment>
+                      ))}
+                    </tr>
                   ))}
                 </tbody>
               </table>
