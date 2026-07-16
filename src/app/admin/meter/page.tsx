@@ -4,6 +4,7 @@ import { isoDate, istToday, dayBoundsUTC, dayLabel, toNum } from "@/lib/format";
 import AutoSubmitDate from "@/components/AutoSubmitDate";
 import AutoSubmitSelect from "@/components/AutoSubmitSelect";
 import CrisMeterFetchForm from "@/components/CrisMeterFetchForm";
+import MeterQuickFix from "@/components/MeterQuickFix";
 
 const isDate = (s?: string) => /^\d{4}-\d{2}-\d{2}$/.test(s ?? "");
 
@@ -12,13 +13,18 @@ const isDate = (s?: string) => /^\d{4}-\d{2}-\d{2}$/.test(s ?? "");
 const MS_NOZZLES = 4;
 const HSD_NOZZLES = 2;
 
-type Side = { open: number[]; close: number[] };
+type NozzleField = "n1Open" | "n1Close" | "n2Open" | "n2Close";
+// A staff reading keeps the name of whoever wrote the sheet it came from, plus
+// which entry/field holds it so a flagged value can be quick-fixed in place.
+type Reading = { v: number; by: string; entryId: number; field: NozzleField };
+type Side = { open: Reading[]; close: Reading[] };
+type CrisSide = { open: number[]; close: number[] };
 type Row = {
   date: string;
   ms: Side;
   hsd: Side;
   // Official CRIS totalizers (sorted ascending, like the staff values).
-  cris?: { ms: Side; hsd: Side };
+  cris?: { ms: CrisSide; hsd: CrisSide };
 };
 
 const fmt = (n: number | undefined) =>
@@ -38,6 +44,30 @@ function CrisSub({ staff, cris }: { staff?: number; cris?: number }) {
         ? "text-emerald-600 dark:text-emerald-400"
         : "text-red-600 dark:text-red-400";
   return <div className={`text-[10px] leading-tight tabular-nums ${cls}`}>{fmt(cris)}</div>;
+}
+
+/** One table cell: the staff reading, the CRIS subscript, who wrote it, and —
+ *  when the reading disagrees with CRIS — a quick-fix button. */
+function ReadingCell({ reading, cris }: { reading?: Reading; cris?: number }) {
+  const flagged =
+    reading !== undefined && cris !== undefined && Math.abs(reading.v - cris) >= 0.05;
+  return (
+    <>
+      {fmt(reading?.v)}
+      <CrisSub staff={reading?.v} cris={cris} />
+      {reading && (
+        <div className="text-[10px] leading-tight text-faint">{reading.by}</div>
+      )}
+      {flagged && (
+        <MeterQuickFix
+          entryId={reading.entryId}
+          field={reading.field}
+          from={reading.v}
+          to={cris}
+        />
+      )}
+    </>
+  );
 }
 
 // Staff sometimes swap opening/closing, so the opening is the smaller reading (a
@@ -77,6 +107,7 @@ export default async function MeterPage({
         },
         orderBy: [{ businessDate: "desc" }, { id: "asc" }],
         select: {
+          id: true,
           businessDate: true,
           shift: true,
           product: true,
@@ -84,6 +115,7 @@ export default async function MeterPage({
           n1Close: true,
           n2Open: true,
           n2Close: true,
+          employee: { select: { name: true } },
         },
       })
     : [];
@@ -116,15 +148,24 @@ export default async function MeterPage({
   for (const e of entries) {
     const row = rowFor(isoDate(e.businessDate));
     const side = e.product === "MS" ? row.ms : row.hsd;
+    const by = e.employee.name;
+    // Record which stored field the shown value came from (a legacy swapped
+    // pair may surface its opening from nClose) so quick-fix edits the right one.
+    const n1o = toNum(e.n1Open), n1c = toNum(e.n1Close);
+    const n2o = toNum(e.n2Open), n2c = toNum(e.n2Close);
     if (e.shift === "MORNING") {
+      const v1 = pickOpening(n1o, n1c);
+      const v2 = pickOpening(n2o, n2c);
       side.open.push(
-        pickOpening(toNum(e.n1Open), toNum(e.n1Close)),
-        pickOpening(toNum(e.n2Open), toNum(e.n2Close)),
+        { v: v1, by, entryId: e.id, field: v1 === n1o ? "n1Open" : "n1Close" },
+        { v: v2, by, entryId: e.id, field: v2 === n2o ? "n2Open" : "n2Close" },
       );
     } else {
+      const v1 = pickClosing(n1o, n1c);
+      const v2 = pickClosing(n2o, n2c);
       side.close.push(
-        pickClosing(toNum(e.n1Open), toNum(e.n1Close)),
-        pickClosing(toNum(e.n2Open), toNum(e.n2Close)),
+        { v: v1, by, entryId: e.id, field: v1 === n1c ? "n1Close" : "n1Open" },
+        { v: v2, by, entryId: e.id, field: v2 === n2c ? "n2Close" : "n2Open" },
       );
     }
   }
@@ -141,7 +182,11 @@ export default async function MeterPage({
   // (MS and HSD independently) — N1 is the lowest, up to the highest. CRIS
   // readings are sorted the same way so the columns line up for comparison.
   for (const r of rows) {
-    for (const side of [r.ms, r.hsd, r.cris?.ms, r.cris?.hsd]) {
+    for (const side of [r.ms, r.hsd]) {
+      side.open.sort((a, b) => a.v - b.v);
+      side.close.sort((a, b) => a.v - b.v);
+    }
+    for (const side of [r.cris?.ms, r.cris?.hsd]) {
       side?.open.sort((a, b) => a - b);
       side?.close.sort((a, b) => a - b);
     }
@@ -205,15 +250,19 @@ export default async function MeterPage({
               {rows.length === 1 ? "" : "s"}
             </p>
           </div>
-          {hasCris && (
-            <p className="mb-2 text-xs text-muted">
-              Small figure under a reading = the official CRIS reading for that nozzle
-              (both sorted low → high) ·{" "}
-              <span className="text-emerald-600 dark:text-emerald-400">green = matches</span> ·{" "}
-              <span className="text-red-600 dark:text-red-400">red = staff entered something
-              different</span>.
-            </p>
-          )}
+          <p className="mb-2 text-xs text-muted">
+            {hasCris && (
+              <>
+                Small figure under a reading = the official CRIS reading for that nozzle
+                (both sorted low → high) ·{" "}
+                <span className="text-emerald-600 dark:text-emerald-400">green = matches</span> ·{" "}
+                <span className="text-red-600 dark:text-red-400">red = staff entered something
+                different</span> — its <strong>Fix → CRIS</strong> button replaces the staff
+                reading with the official one (recalculated &amp; logged) ·{" "}
+              </>
+            )}
+            The name under a reading is the staff member who wrote that sheet.
+          </p>
           {rows.length === 0 ? (
             <p className="py-6 text-center text-sm text-faint">
               No sheets in this period.
@@ -265,8 +314,7 @@ export default async function MeterPage({
                           key={`ms${i}`}
                           className="px-2 py-1.5 text-right tabular-nums text-foreground"
                         >
-                          {fmt(r.ms[view][i])}
-                          <CrisSub staff={r.ms[view][i]} cris={r.cris?.ms[view][i]} />
+                          <ReadingCell reading={r.ms[view][i]} cris={r.cris?.ms[view][i]} />
                         </td>
                       ))}
                       {hsdCols.map((i) => (
@@ -277,8 +325,7 @@ export default async function MeterPage({
                             (i === 0 ? " border-l border-border" : "")
                           }
                         >
-                          {fmt(r.hsd[view][i])}
-                          <CrisSub staff={r.hsd[view][i]} cris={r.cris?.hsd[view][i]} />
+                          <ReadingCell reading={r.hsd[view][i]} cris={r.cris?.hsd[view][i]} />
                         </td>
                       ))}
                     </tr>
