@@ -3,7 +3,6 @@ import { crisStatus } from "@/lib/crisCreds";
 import { toNum, isoDate } from "@/lib/format";
 import CrisReportUpload from "@/components/CrisReportUpload";
 import CrisFetchForm from "@/components/CrisFetchForm";
-import CrisMeterFetchForm from "@/components/CrisMeterFetchForm";
 import CrisCompare from "@/components/CrisCompare";
 import AutoSubmitDate from "@/components/AutoSubmitDate";
 
@@ -91,7 +90,6 @@ export default async function CrisPage({
         defaultTo={newest}
         hint={gapHint}
       />
-      <CrisMeterFetchForm configured={configured} />
       <CrisReportUpload />
 
       <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">

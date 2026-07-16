@@ -258,12 +258,19 @@ async function downloadXls(page: Page): Promise<Buffer | null> {
   ]);
   if (!download) return null;
 
+  // Read into memory, then delete from disk immediately — these exports hold
+  // customer data and would otherwise pile up in the container's temp dir.
   const p = await download.path().catch(() => null);
-  if (p) return fs.readFileSync(p);
+  if (p) {
+    const buf = fs.readFileSync(p);
+    await download.delete().catch(() => {});
+    return buf;
+  }
   const stream = await download.createReadStream().catch(() => null);
   if (!stream) return null;
   const chunks: Buffer[] = [];
   for await (const c of stream) chunks.push(c as Buffer);
+  await download.delete().catch(() => {});
   return Buffer.concat(chunks);
 }
 

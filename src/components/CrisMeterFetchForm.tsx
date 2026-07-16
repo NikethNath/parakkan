@@ -78,10 +78,9 @@ export default function CrisMeterFetchForm({ configured }: { configured: boolean
         Fetch meter readings (CRIS)
       </h2>
       <p className="mb-3 text-xs text-muted">
-        Downloads the day&apos;s Transaction Report and works out each pump&apos;s opening and
-        closing totalizer (pumps 1–2 HSD, 3–6 MS) — compare these against the readings staff
-        typed in, on the <strong>DSR → Meter</strong> tab. Run when you&apos;re not logged into
-        CRIS yourself.
+        Downloads the day&apos;s CRIS Transaction Report and caches each pump&apos;s official
+        opening totalizer (pumps 1–2 HSD, 3–6 MS) — it appears in small print under the staff
+        readings below. Run when you&apos;re not logged into CRIS yourself.
       </p>
       <div className="flex flex-wrap items-end gap-3">
         <label className="text-sm">
