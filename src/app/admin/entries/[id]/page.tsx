@@ -1,10 +1,10 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { toNum, isoDate, inr, istDateTime } from "@/lib/format";
 import DailyEntryForm, { type DailyEntryInitial } from "@/components/DailyEntryForm";
 import DeleteEntryButton from "@/components/DeleteEntryButton";
 import CashVerifiedToggle from "@/components/CashVerifiedToggle";
+import StoredQueryLink from "@/components/StoredQueryLink";
 
 export default async function AdminEntryDetail({
   params,
@@ -85,9 +85,9 @@ export default async function AdminEntryDetail({
 
   return (
     <div className="pb-4">
-      <Link href="/admin" className="text-sm text-accent hover:underline">
+      <StoredQueryLink href="/admin" className="text-sm text-accent hover:underline">
         ← Back to dashboard
-      </Link>
+      </StoredQueryLink>
 
       <div className="mt-2 rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
         <div className="flex flex-wrap items-center justify-between gap-2">

@@ -3,8 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-
-const STORE_KEY = "hpcl.adminNavQuery";
+import { ADMIN_NAV_QUERY_KEY as STORE_KEY } from "@/lib/adminNavQuery";
 
 type Leaf = { href: string; label: string; exact?: boolean };
 type Group = { label: string; children: Leaf[] };

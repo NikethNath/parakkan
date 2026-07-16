@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { withStoredQuery } from "@/lib/adminNavQuery";
 
 /** Admin-only: permanently delete a submission (e.g. a staff test entry). */
 export default function DeleteEntryButton({
@@ -32,7 +33,7 @@ export default function DeleteEntryButton({
         setBusy(false);
         return;
       }
-      router.replace("/admin");
+      router.replace(withStoredQuery("/admin"));
       router.refresh();
     } catch {
       setErr("Network error");

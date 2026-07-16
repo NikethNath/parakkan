@@ -11,6 +11,7 @@ import {
   shortExcessLabel,
 } from "@/lib/calc";
 import { inr, litres, istToday, istHour } from "@/lib/format";
+import { withStoredQuery } from "@/lib/adminNavQuery";
 
 type FormState = {
   businessDate: string;
@@ -241,7 +242,7 @@ export default function DailyEntryForm({
         }
         return;
       }
-      router.push(redirectTo);
+      router.push(withStoredQuery(redirectTo));
       router.refresh();
     } catch {
       setConfirming(false);
