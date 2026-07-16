@@ -10,7 +10,7 @@ function monthBounds(month: string) {
   const [y, m] = month.split("-").map(Number);
   return { start: new Date(Date.UTC(y, m - 1, 1)), end: new Date(Date.UTC(y, m, 1)) };
 }
-const TOL = 0.1; // litres tolerance
+const TOL = 0.15; // litres tolerance
 const fmtL = (n: number) => `${n.toFixed(2)} L`;
 
 type Row = { date: string; cris: number | null; staff: number };
