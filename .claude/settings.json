@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(NODE_PATH=__TRACKED_VAR__/node_modules node /tmp/claude-1000/-home-tempest-Desktop-hpcl-outlet-accounting/6e732945-b68d-4cc3-a428-e14e77ccfe11/scratchpad/cris-txn-probe.js)",
+      "Bash(NODE_PATH=__TRACKED_VAR__/node_modules node /tmp/claude-1000/-home-tempest-Desktop-hpcl-outlet-accounting/6e732945-b68d-4cc3-a428-e14e77ccfe11/scratchpad/cris-txn-fetch.js)",
+      "Bash(NODE_PATH=__TRACKED_VAR__/node_modules node -e ' *)",
+      "Bash(NODE_PATH=__TRACKED_VAR__/node_modules npx tsx -e ' *)",
+      "Bash(npx prisma *)"
+    ]
+  }
+}

@@ -1,3 +1,4 @@
+import React from "react";
 import { prisma } from "@/lib/db";
 import { isoDate, istToday, dayBoundsUTC, dayLabel, toNum } from "@/lib/format";
 import AutoSubmitDate from "@/components/AutoSubmitDate";
@@ -9,7 +10,13 @@ const isDate = (s?: string) => /^\d{4}-\d{2}-\d{2}$/.test(s ?? "");
 const MS_NOZZLES = 4;
 const HSD_NOZZLES = 2;
 
-type Row = { date: string; ms: number[]; hsd: number[] };
+type CrisSide = { open: number[]; close: number[] };
+type Row = {
+  date: string;
+  ms: number[];
+  hsd: number[];
+  cris?: { ms: CrisSide; hsd: CrisSide };
+};
 
 const fmt = (n: number | undefined) =>
   n === undefined
@@ -57,24 +64,57 @@ export default async function MeterPage({
       })
     : [];
 
+  // Official per-pump readings fetched from the CRIS Transaction Report
+  // (pumps 1–2 HSD, 3–6 MS) — shown under the staff row for cross-checking.
+  const crisReadings = hasRange
+    ? await prisma.crisPumpDaily.findMany({
+        where: { businessDate: { gte: dayBoundsUTC(lo).start, lt: dayBoundsUTC(hi).end } },
+        orderBy: [{ businessDate: "asc" }, { pump: "asc" }],
+        select: {
+          businessDate: true,
+          pump: true,
+          product: true,
+          openTotalizer: true,
+          closeTotalizer: true,
+        },
+      })
+    : [];
+
   const map = new Map<string, Row>();
-  for (const e of entries) {
-    const d = isoDate(e.businessDate);
+  const rowFor = (d: string) => {
     const row = map.get(d) ?? { date: d, ms: [], hsd: [] };
+    map.set(d, row);
+    return row;
+  };
+  for (const e of entries) {
+    const row = rowFor(isoDate(e.businessDate));
     const target = e.product === "MS" ? row.ms : row.hsd;
     target.push(
       pickOpening(toNum(e.n1Open), toNum(e.n1Close)),
       pickOpening(toNum(e.n2Open), toNum(e.n2Close)),
     );
-    map.set(d, row);
+  }
+  for (const c of crisReadings) {
+    const row = rowFor(isoDate(c.businessDate));
+    row.cris ??= { ms: { open: [], close: [] }, hsd: { open: [], close: [] } };
+    const side = c.product === "MS" ? row.cris.ms : row.cris.hsd;
+    side.open.push(toNum(c.openTotalizer));
+    side.close.push(toNum(c.closeTotalizer));
   }
   // Chronological ledger: oldest day at the top, most recent at the bottom.
   const rows = [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
   // Submission order is unreliable, so sort each product's readings ascending
-  // (MS and HSD independently) — N1 is the lowest, up to the highest.
+  // (MS and HSD independently) — N1 is the lowest, up to the highest. CRIS
+  // readings are sorted the same way so the columns line up for comparison.
   for (const r of rows) {
     r.ms.sort((a, b) => a - b);
     r.hsd.sort((a, b) => a - b);
+    if (r.cris) {
+      r.cris.ms.open.sort((a, b) => a - b);
+      r.cris.ms.close.sort((a, b) => a - b);
+      r.cris.hsd.open.sort((a, b) => a - b);
+      r.cris.hsd.close.sort((a, b) => a - b);
+    }
   }
 
   const msCols = Array.from({ length: MS_NOZZLES }, (_, i) => i);
@@ -161,30 +201,78 @@ export default async function MeterPage({
                 </thead>
                 <tbody>
                   {rows.map((r) => (
-                    <tr key={r.date} className="border-t border-border">
-                      <td className="whitespace-nowrap px-2 py-1.5 text-muted">
-                        {dayLabel(r.date)}
-                      </td>
-                      {msCols.map((i) => (
-                        <td
-                          key={`ms${i}`}
-                          className="px-2 py-1.5 text-right tabular-nums text-foreground"
-                        >
-                          {fmt(r.ms[i])}
+                    <React.Fragment key={r.date}>
+                      <tr className="border-t border-border">
+                        <td className="whitespace-nowrap px-2 py-1.5 text-muted">
+                          {dayLabel(r.date)}
                         </td>
-                      ))}
-                      {hsdCols.map((i) => (
-                        <td
-                          key={`hsd${i}`}
-                          className={
-                            "px-2 py-1.5 text-right tabular-nums text-foreground" +
-                            (i === 0 ? " border-l border-border" : "")
-                          }
-                        >
-                          {fmt(r.hsd[i])}
-                        </td>
-                      ))}
-                    </tr>
+                        {msCols.map((i) => (
+                          <td
+                            key={`ms${i}`}
+                            className="px-2 py-1.5 text-right tabular-nums text-foreground"
+                          >
+                            {fmt(r.ms[i])}
+                          </td>
+                        ))}
+                        {hsdCols.map((i) => (
+                          <td
+                            key={`hsd${i}`}
+                            className={
+                              "px-2 py-1.5 text-right tabular-nums text-foreground" +
+                              (i === 0 ? " border-l border-border" : "")
+                            }
+                          >
+                            {fmt(r.hsd[i])}
+                          </td>
+                        ))}
+                      </tr>
+                      {r.cris && (
+                        <>
+                          <tr className="bg-surface-2/60 text-xs">
+                            <td className="whitespace-nowrap px-2 py-1 text-faint">
+                              CRIS open
+                            </td>
+                            {msCols.map((i) => (
+                              <td key={`cmo${i}`} className="px-2 py-1 text-right tabular-nums text-muted">
+                                {fmt(r.cris!.ms.open[i])}
+                              </td>
+                            ))}
+                            {hsdCols.map((i) => (
+                              <td
+                                key={`cho${i}`}
+                                className={
+                                  "px-2 py-1 text-right tabular-nums text-muted" +
+                                  (i === 0 ? " border-l border-border" : "")
+                                }
+                              >
+                                {fmt(r.cris!.hsd.open[i])}
+                              </td>
+                            ))}
+                          </tr>
+                          <tr className="bg-surface-2/60 text-xs">
+                            <td className="whitespace-nowrap px-2 py-1 text-faint">
+                              CRIS close
+                            </td>
+                            {msCols.map((i) => (
+                              <td key={`cmc${i}`} className="px-2 py-1 text-right tabular-nums text-muted">
+                                {fmt(r.cris!.ms.close[i])}
+                              </td>
+                            ))}
+                            {hsdCols.map((i) => (
+                              <td
+                                key={`chc${i}`}
+                                className={
+                                  "px-2 py-1 text-right tabular-nums text-muted" +
+                                  (i === 0 ? " border-l border-border" : "")
+                                }
+                              >
+                                {fmt(r.cris!.hsd.close[i])}
+                              </td>
+                            ))}
+                          </tr>
+                        </>
+                      )}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>

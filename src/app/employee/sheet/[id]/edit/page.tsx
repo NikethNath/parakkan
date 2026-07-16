@@ -37,7 +37,7 @@ export default async function EmployeeEditSheet({
       businessDate: isoDate(entry.businessDate),
       shift: entry.shift,
       product: entry.product,
-      partnerId: entry.partnerId ? String(entry.partnerId) : "",
+      partnerId: entry.partnerId ? String(entry.partnerId) : "NONE",
       rate: s(entry.rate),
       n1Open: s(entry.n1Open),
       n1Close: s(entry.n1Close),

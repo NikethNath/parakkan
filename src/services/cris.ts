@@ -1,17 +1,23 @@
 import fs from "fs";
 import type { Page } from "playwright-core";
 import { parseCrisReport, type CrisReport } from "./crisReport";
+import { parseCrisTransactions, type CrisTransactionsReport } from "./crisTransactions";
 
 /**
- * Headless automation of the CRIS "Daily Sales Report": logs in, opens the
- * report, filters by RO SAP code + date range (Product = All), downloads the
- * XLS, parses it, then logs out.
+ * Headless automation of CRIS reports. Two fetchers share one session flow:
+ *  - fetchDailySalesReport   → "Daily Sales Report" (official per-day sale litres)
+ *  - fetchTransactionsReport → "Transaction Report" (per-pump start/end totalizers)
  *
- * Selectors below were reverse-engineered against the live CRIS portal
- * (Angular + PrimeNG). CRIS is slow, so each step has a generous settle wait.
+ * Flow: log in (pre-authenticated dealer link preferred, username/password
+ * fallback) → open the report route → fill the Filter modal (RO SAP code +
+ * date range) → download the XLS → parse → log out.
  *
- * ⚠ CRIS enforces a single active session. This must log out cleanly or the
- * next login (yours or the next fetch) is blocked until the session times out.
+ * Selectors were reverse-engineered against the live CRIS portal (Angular +
+ * PrimeNG). CRIS is slow, so each step has a generous settle wait.
+ *
+ * ⚠ CRIS enforces a single active session. Logout ALWAYS runs (even on
+ * failure) or the next login — automated or yours — is blocked until the
+ * session times out.
  */
 
 const BASE = "https://cris.hpcl.co.in/HPCL";
@@ -51,7 +57,122 @@ export interface FetchResult {
   step?: string;
 }
 
-export async function fetchDailySalesReport(opts: FetchOpts): Promise<FetchResult> {
+export interface TxnFetchResult {
+  ok: boolean;
+  report?: CrisTransactionsReport;
+  error?: string;
+  step?: string;
+}
+
+/** Sign in. Returns an error message, or null on success. */
+async function login(page: Page, opts: FetchOpts): Promise<string | null> {
+  if (opts.loginUrl) {
+    let opened = false;
+    for (let a = 1; a <= 3 && !opened; a++) {
+      try {
+        await page.goto(opts.loginUrl, { waitUntil: "commit", timeout: 120000 });
+        opened = true;
+      } catch {
+        await page.waitForTimeout(2500);
+      }
+    }
+    if (!opened) return "Could not open the CRIS dealer login link (network/timeout).";
+    // The link redirects to the dashboard once the session is set.
+    await page
+      .waitForFunction(() => !/\/(dealerlogin|login)\b/.test(location.pathname), { timeout: 60000 })
+      .catch(() => {});
+    await page.waitForTimeout(15000);
+    if (/\/(dealerlogin|login)\b/.test(page.url())) {
+      return "Dealer login link didn't sign in — it may have expired, or another CRIS session is active. Log out of CRIS and retry.";
+    }
+    return null;
+  }
+
+  let loaded = false;
+  for (let a = 1; a <= 3 && !loaded; a++) {
+    try {
+      await page.goto(`${BASE}/login`, { waitUntil: "commit", timeout: 120000 });
+      await page.waitForSelector("#strUserId", { timeout: 60000 });
+      loaded = true;
+    } catch {
+      await page.waitForTimeout(2500);
+    }
+  }
+  if (!loaded) return "Could not load the CRIS login page (network/timeout).";
+  if (!opts.username || !opts.password) {
+    return "No CRIS login configured (dealer link or username/password).";
+  }
+  await page.waitForTimeout(2000);
+  await page.fill("#strUserId", opts.username);
+  await page.fill("#password", opts.password);
+  await page.click("#submitbtn");
+  await page
+    .waitForFunction(() => !location.pathname.endsWith("/login"), { timeout: 45000 })
+    .catch(() => {});
+  await page.waitForTimeout(15000); // CRIS dashboard is slow to come up after login
+  if (/\/login/.test(page.url())) {
+    return "Login failed — wrong credentials, or another CRIS session is active (single-session). Log out of CRIS and retry in a few minutes.";
+  }
+  return null;
+}
+
+/** Open a report route and wait for its "Filter Criteria" modal (auto-opens;
+ *  falls back to clicking the Filter button). */
+async function openReportFilter(page: Page, route: string): Promise<void> {
+  await page.goto(`${BASE}${route}`, { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForTimeout(8000);
+  const sapLabel = page.locator("text=/Select RO SAP Code/i").first();
+  const ready = await sapLabel
+    .waitFor({ state: "visible", timeout: 60000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!ready) {
+    await page
+      .locator('.myBtn[title="Filter"], button[title="Filter"]')
+      .first()
+      .click({ force: true })
+      .catch(() => {});
+    await page.waitForTimeout(8000);
+    await sapLabel.waitFor({ state: "visible", timeout: 30000 }).catch(() => {});
+  }
+}
+
+/** Fill the filter modal: tick the RO SAP code, set the date range, click Ok. */
+async function applyFilter(
+  page: Page,
+  sap: string,
+  fromDate: string,
+  toDate: string,
+): Promise<void> {
+  await page.locator("text=/Select RO SAP Code/i").first().click().catch(() => {});
+  await page.waitForTimeout(5000);
+  await page
+    .locator(".p-multiselect-item, .p-dropdown-item, li[role=option]")
+    .filter({ hasText: sap })
+    .first()
+    .click()
+    .catch(() => {}); // tick the RO option
+  await page.waitForTimeout(3000);
+  await page.keyboard.press("Escape").catch(() => {}); // close the panel covering the form
+  await page.waitForTimeout(3000);
+
+  await page.fill('input[formcontrolname="strFromDate"]', `${fromDate}T00:00`).catch(() => {});
+  await page.fill('input[formcontrolname="strToDate"]', `${toDate}T23:59`).catch(() => {});
+  await page.waitForTimeout(2000);
+
+  await page.locator('.submit-btn:has-text("Ok")').last().click().catch(() => {});
+  await page.waitForLoadState("networkidle", { timeout: 60000 }).catch(() => {});
+  await page.waitForTimeout(8000); // the report grid loads
+}
+
+/** Shared session runner: launch → login → report → filter → download → parse
+ *  → (always) logout. */
+async function runReport<T>(
+  opts: FetchOpts,
+  route: string,
+  parse: (buf: Buffer) => T,
+  emptyError: (r: T) => string | null,
+): Promise<{ ok: boolean; report?: T; error?: string; step?: string }> {
   const exe = chromePath();
   if (!exe) {
     return { ok: false, step: "launch", error: "Chrome not found — set CHROME_PATH." };
@@ -74,135 +195,27 @@ export async function fetchDailySalesReport(opts: FetchOpts): Promise<FetchResul
     const page = await ctx.newPage();
     outerPage = page; // kept for a best-effort logout in `finally`
 
-    // 1) Login. Two ways in: a pre-authenticated dealer link (preferred — no
-    //    form), or the username/password form. Either way the dashboard takes
-    //    several seconds to render before the report route works.
-    if (opts.loginUrl) {
-      let opened = false;
-      for (let a = 1; a <= 3 && !opened; a++) {
-        try {
-          await page.goto(opts.loginUrl, { waitUntil: "commit", timeout: 120000 });
-          opened = true;
-        } catch {
-          await page.waitForTimeout(2500);
-        }
-      }
-      if (!opened) {
-        return { ok: false, step, error: "Could not open the CRIS dealer login link (network/timeout)." };
-      }
-      // The link redirects to the dashboard once the session is set.
-      await page
-        .waitForFunction(() => !/\/(dealerlogin|login)\b/.test(location.pathname), { timeout: 60000 })
-        .catch(() => {});
-      await page.waitForTimeout(15000);
-      if (/\/(dealerlogin|login)\b/.test(page.url())) {
-        return {
-          ok: false,
-          step,
-          error:
-            "Dealer login link didn't sign in — it may have expired, or another CRIS session is active. Log out of CRIS and retry.",
-        };
-      }
-    } else {
-      let loaded = false;
-      for (let a = 1; a <= 3 && !loaded; a++) {
-        try {
-          await page.goto(`${BASE}/login`, { waitUntil: "commit", timeout: 120000 });
-          await page.waitForSelector("#strUserId", { timeout: 60000 });
-          loaded = true;
-        } catch {
-          await page.waitForTimeout(2500);
-        }
-      }
-      if (!loaded) {
-        return { ok: false, step, error: "Could not load the CRIS login page (network/timeout)." };
-      }
-      if (!opts.username || !opts.password) {
-        return { ok: false, step, error: "No CRIS login configured (dealer link or username/password)." };
-      }
-      await page.waitForTimeout(2000);
-      await page.fill("#strUserId", opts.username);
-      await page.fill("#password", opts.password);
-      await page.click("#submitbtn");
-      await page
-        .waitForFunction(() => !location.pathname.endsWith("/login"), { timeout: 45000 })
-        .catch(() => {});
-      await page.waitForTimeout(15000); // CRIS dashboard is slow to come up after login
-      if (/\/login/.test(page.url())) {
-        return {
-          ok: false,
-          step,
-          error:
-            "Login failed — wrong credentials, or another CRIS session is active (single-session). Log out of CRIS and retry in a few minutes.",
-        };
-      }
-    }
-    // Past both login branches (each returns on failure) → we're signed in.
+    const loginError = await login(page, opts);
+    if (loginError) return { ok: false, step, error: loginError };
     loggedIn = true;
 
-    // 2) Open the Daily Sales Report — the filter modal auto-opens.
     step = "open-report";
-    await page.goto(`${BASE}/home/layout/report/dsr`, {
-      waitUntil: "domcontentloaded",
-      timeout: 60000,
-    });
-    await page.waitForTimeout(8000);
-    const sapLabel = page.locator("text=/Select RO SAP Code/i").first();
-    const filterReady = await sapLabel
-      .waitFor({ state: "visible", timeout: 60000 })
-      .then(() => true)
-      .catch(() => false);
-    if (!filterReady) {
-      // Fallback: explicitly click the Filter button to open the modal.
-      await page
-        .locator('.myBtn[title="Filter"], button[title="Filter"]')
-        .first()
-        .click({ force: true })
-        .catch(() => {});
-      await page.waitForTimeout(8000);
-      await sapLabel.waitFor({ state: "visible", timeout: 30000 }).catch(() => {});
-    }
+    await openReportFilter(page, route);
 
-    // 3) Filter: RO SAP code (PrimeNG multiselect) + date range.
     step = "filter";
-    const sap = opts.sapCode || opts.username;
-    await sapLabel.click().catch(() => {}); // open the multiselect panel
-    await page.waitForTimeout(5000);
-    await page
-      .locator(".p-multiselect-item, .p-dropdown-item, li[role=option]")
-      .filter({ hasText: sap })
-      .first()
-      .click()
-      .catch(() => {}); // tick the RO option
-    await page.waitForTimeout(3000);
-    await page.keyboard.press("Escape").catch(() => {}); // close the panel covering the form
-    await page.waitForTimeout(3000);
+    const sap = opts.sapCode || opts.username || "";
+    await applyFilter(page, sap, opts.fromDate, opts.toDate);
 
-    await page
-      .fill('input[formcontrolname="strFromDate"]', `${opts.fromDate}T00:00`)
-      .catch(() => {});
-    await page
-      .fill('input[formcontrolname="strToDate"]', `${opts.toDate}T23:59`)
-      .catch(() => {});
-    await page.waitForTimeout(2000);
-
-    await page.locator('.submit-btn:has-text("Ok")').last().click().catch(() => {});
-    await page.waitForLoadState("networkidle", { timeout: 60000 }).catch(() => {});
-    await page.waitForTimeout(8000); // the report grid loads
-
-    // 4) Download the XLS (round download-icon → "Excel" option in the popup).
     step = "download";
     const buf = await downloadXls(page);
     if (!buf) {
       return { ok: false, step, error: "Could not download the report XLS." };
     }
 
-    // 5) Parse.
     step = "parse";
-    const report = parseCrisReport(buf);
-    if (report.rows.length === 0) {
-      return { ok: false, step, error: "Downloaded report had no MS/HSD rows." };
-    }
+    const report = parse(buf);
+    const empty = emptyError(report);
+    if (empty) return { ok: false, step, error: empty };
 
     return { ok: true, report };
   } catch (e) {
@@ -213,6 +226,21 @@ export async function fetchDailySalesReport(opts: FetchOpts): Promise<FetchResul
     if (outerPage && loggedIn) await logout(outerPage).catch(() => {});
     await browser.close().catch(() => {});
   }
+}
+
+/** "Daily Sales Report": official per-day/product sale litres. */
+export async function fetchDailySalesReport(opts: FetchOpts): Promise<FetchResult> {
+  return runReport(opts, "/home/layout/report/dsr", parseCrisReport, (r) =>
+    r.rows.length === 0 ? "Downloaded report had no MS/HSD rows." : null,
+  );
+}
+
+/** "Transaction Report": per-pump opening/closing totalizers for each day in
+ *  the range (pumps 1–2 HSD, 3–6 MS). */
+export async function fetchTransactionsReport(opts: FetchOpts): Promise<TxnFetchResult> {
+  return runReport(opts, "/home/layout/report/transaction", parseCrisTransactions, (r) =>
+    r.rows.length === 0 ? "Downloaded report had no transactions." : null,
+  );
 }
 
 async function downloadXls(page: Page): Promise<Buffer | null> {
@@ -240,6 +268,9 @@ async function downloadXls(page: Page): Promise<Buffer | null> {
 }
 
 async function logout(page: Page) {
+  // Close any stray modal first so nothing intercepts the profile clicks.
+  await page.keyboard.press("Escape").catch(() => {});
+  await page.waitForTimeout(1000);
   // Avatar → profile drawer → Logout → "Confirm" dialog. CRIS requires the
   // confirm, or the session stays active (single-session). The dialog's class
   // names are minified, so target the stable button text.

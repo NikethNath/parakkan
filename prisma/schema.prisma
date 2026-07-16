@@ -271,6 +271,24 @@ model CrisDaily {
   @@unique([businessDate, product])
 }
 
+// Per-pump opening/closing totalizer for a day, derived from the CRIS
+// "Transaction Report": open = earliest txn's Start Totalizer, close = latest
+// txn's End Totalizer. Pumps 1–2 = HSD, 3–6 = MS. Used to cross-check the
+// meter readings staff type into their sheets.
+model CrisPumpDaily {
+  id             Int      @id @default(autoincrement())
+  businessDate   DateTime @db.Date
+  pump           Int
+  product        Product
+  openTotalizer  Decimal  @db.Decimal(14, 2)
+  closeTotalizer Decimal  @db.Decimal(14, 2)
+  txnCount       Int      @default(0)
+  fetchedAt      DateTime @default(now())
+
+  @@unique([businessDate, pump])
+  @@index([businessDate])
+}
+
 model BankUpload {
   id           Int       @id @default(autoincrement())
   uploadedBy   User      @relation(fields: [uploadedById], references: [id])

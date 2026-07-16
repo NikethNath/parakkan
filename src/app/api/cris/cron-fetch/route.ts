@@ -1,18 +1,21 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCrisLogin } from "@/lib/crisCreds";
-import { fetchDailySalesReport } from "@/services/cris";
-import { storeCrisReport } from "@/services/crisStore";
+import { fetchDailySalesReport, fetchTransactionsReport } from "@/services/cris";
+import { storeCrisReport, storeCrisPumpReadings } from "@/services/crisStore";
 import { isoDate } from "@/lib/format";
 
 /**
- * Unattended daily CRIS fetch, triggered by a droplet cron (see DEPLOY.md).
+ * Unattended hourly CRIS fetch, triggered by a droplet cron (see DEPLOY.md).
  * Authenticated by a shared secret (CRON_SECRET) rather than an admin session.
- * Re-fetches from the last cached day (to refresh a day that was incomplete
- * when first cached) through today, then upserts the rows.
+ * Two pulls per run:
+ *  1. Daily Sales Report — from the last cached day (to refresh a day that was
+ *     incomplete when first cached) through today.
+ *  2. Transaction Report — yesterday + today, reduced to per-pump
+ *     opening/closing totalizers (meter-reading cross-check).
  */
 
-export const maxDuration = 180;
+export const maxDuration = 300;
 
 /** Calendar date in IST (YYYY-MM-DD), optionally offset by whole days. */
 function istDate(offsetDays = 0): string {
@@ -53,5 +56,18 @@ export async function POST(req: Request) {
 
   const imported = await storeCrisReport(result.report);
   const days = new Set(result.report.rows.map((r) => r.businessDate)).size;
-  return NextResponse.json({ ok: true, imported, days, from: fromDate, to: toDate });
+
+  // 2) Per-pump meter readings from the Transaction Report: yesterday + today
+  //    (yesterday so the final closing after midnight is captured). A failure
+  //    here doesn't fail the whole run — the DSR data is already stored.
+  const meters: { imported?: number; error?: string; step?: string } = {};
+  const txn = await fetchTransactionsReport({ ...login, fromDate: istDate(-1), toDate });
+  if (txn.ok && txn.report) {
+    meters.imported = await storeCrisPumpReadings(txn.report);
+  } else {
+    meters.error = txn.error ?? "Fetch failed";
+    meters.step = txn.step;
+  }
+
+  return NextResponse.json({ ok: true, imported, days, from: fromDate, to: toDate, meters });
 }

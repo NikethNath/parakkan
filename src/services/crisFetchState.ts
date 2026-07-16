@@ -22,11 +22,22 @@ export interface CrisFetchState {
   result: CrisFetchResult | null;
 }
 
-const g = globalThis as unknown as { __crisFetchState?: CrisFetchState };
+const g = globalThis as unknown as {
+  __crisFetchState?: CrisFetchState;
+  __crisMeterFetchState?: CrisFetchState;
+};
 
 export function getCrisFetchState(): CrisFetchState {
   if (!g.__crisFetchState) {
     g.__crisFetchState = { running: false, startedAt: null, finishedAt: null, result: null };
   }
   return g.__crisFetchState;
+}
+
+/** Same idea, for the per-pump meter-readings (Transaction Report) fetch. */
+export function getCrisMeterFetchState(): CrisFetchState {
+  if (!g.__crisMeterFetchState) {
+    g.__crisMeterFetchState = { running: false, startedAt: null, finishedAt: null, result: null };
+  }
+  return g.__crisMeterFetchState;
 }
