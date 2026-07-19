@@ -15,7 +15,7 @@ export default async function ShortExcessPage({
   const today = istToday();
 
   const staff = await prisma.user.findMany({
-    where: { role: "EMPLOYEE" },
+    where: { role: "EMPLOYEE", archivedAt: null },
     orderBy: [{ active: "desc" }, { name: "asc" }],
     select: { id: true, name: true, active: true },
   });

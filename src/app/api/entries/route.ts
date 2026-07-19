@@ -21,6 +21,10 @@ function toDate(yyyyMmDd: string): Date {
 export async function POST(req: Request) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  // Accountants are read-only — they never submit sheets.
+  if (user.role === "ACCOUNTANT") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const body = await req.json().catch(() => null);
   const meta = metaSchema.safeParse(body);

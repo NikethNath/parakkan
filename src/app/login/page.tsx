@@ -26,7 +26,9 @@ export default function LoginPage() {
         setError(data.error ?? "Login failed");
         return;
       }
-      router.replace(data.role === "ADMIN" ? "/admin" : "/employee");
+      router.replace(
+        data.role === "ADMIN" ? "/admin" : data.role === "ACCOUNTANT" ? "/accounts" : "/employee",
+      );
       router.refresh();
     } catch {
       setError("Network error — please try again");

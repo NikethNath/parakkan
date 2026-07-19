@@ -8,7 +8,7 @@ const createSchema = z.object({
   name: z.string().trim().min(1),
   username: z.string().trim().toLowerCase().min(1),
   password: z.string().min(4),
-  role: z.enum(["EMPLOYEE", "ADMIN"]).default("EMPLOYEE"),
+  role: z.enum(["EMPLOYEE", "ADMIN", "ACCOUNTANT"]).default("EMPLOYEE"),
   phone: z.string().trim().optional(),
 });
 

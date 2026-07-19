@@ -10,9 +10,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ACCOUNTANT gets read-only access to the daily summary (and its totals) only.
 enum Role {
   EMPLOYEE
   ADMIN
+  ACCOUNTANT
 }
 
 enum PayType {
@@ -53,6 +55,10 @@ model User {
   shiftRate     Decimal  @default(0) @db.Decimal(12, 2)
   extraPay      Decimal  @default(0) @db.Decimal(12, 2) // fixed pay for extra duties
   active        Boolean  @default(true)
+  // Set when the person left and the account was "deleted" from the staff page
+  // while still owning records: hidden everywhere, username freed for a new
+  // hire, but the row survives so their sheets keep their name and history.
+  archivedAt    DateTime?
   phone         String?
   joinedOn      DateTime @default(now())
   createdAt     DateTime @default(now())

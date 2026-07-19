@@ -1,6 +1,6 @@
 import SummaryReport from "@/components/SummaryReport";
 
-export default async function SummaryPage({
+export default async function AccountsPage({
   searchParams,
 }: {
   searchParams: Promise<{ from?: string; to?: string }>;

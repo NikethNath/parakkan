@@ -5,16 +5,22 @@ import { getSessionUser } from "@/lib/auth";
 import { entryInputSchema, computeEntry } from "@/lib/calc";
 import { toNum } from "@/lib/format";
 
+const fieldEnum = z.enum(["n1Open", "n1Close", "n2Open", "n2Close"]);
 const bodySchema = z.object({
-  field: z.enum(["n1Open", "n1Close", "n2Open", "n2Close"]),
-  value: z.coerce.number().finite().min(0),
+  // One write replaces a wrong reading; two writes fill a blank nozzle pair.
+  fields: z
+    .array(z.object({ field: fieldEnum, value: z.coerce.number().finite().min(0) }))
+    .min(1)
+    .max(2)
+    .refine((fs) => new Set(fs.map((f) => f.field)).size === fs.length, "Duplicate field"),
 });
 
 /**
- * Quick-fix for one meter reading (used by the Meter tab when a staff reading
- * disagrees with the official CRIS totalizer). Replaces the single reading,
- * re-runs the authoritative calc, and logs the change in the audit trail —
- * same rules as a full admin edit, without resubmitting the whole sheet.
+ * Quick-fix for meter readings (used by the Meter tab): replace a staff
+ * reading that disagrees with the official CRIS totalizer, or fill a missing
+ * nozzle pair from it. Re-runs the authoritative calc and logs every change in
+ * the audit trail — same rules as a full admin edit, without resubmitting the
+ * whole sheet.
  */
 export async function POST(
   req: Request,
@@ -35,7 +41,7 @@ export async function POST(
   if (!body.success) {
     return NextResponse.json({ error: "Validation failed" }, { status: 400 });
   }
-  const { field, value } = body.data;
+  const writes = body.data.fields;
 
   const existing = await prisma.dailyEntry.findUnique({
     where: { id },
@@ -50,16 +56,37 @@ export async function POST(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  // Rebuild the sheet's input with the one reading replaced, then reuse the
-  // shared schema (normalizes opening < closing) and calc engine.
-  const parsed = entryInputSchema.safeParse({
-    product: existing.product,
-    rate: toNum(existing.rate),
+  const readings: Record<string, number> = {
     n1Open: toNum(existing.n1Open),
     n1Close: toNum(existing.n1Close),
     n2Open: toNum(existing.n2Open),
     n2Close: toNum(existing.n2Close),
-    [field]: value,
+  };
+  for (const w of writes) readings[w.field] = w.value;
+
+  // A totalizer is never 0, and the schema's swap-normalization would turn a
+  // half-filled pair (one reading 0) into a whole-totalizer litre figure. So a
+  // touched nozzle must come out with both readings or neither.
+  for (const [a, b] of [["n1Open", "n1Close"], ["n2Open", "n2Close"]] as const) {
+    if (!writes.some((w) => w.field === a || w.field === b)) continue;
+    if ((readings[a] === 0) !== (readings[b] === 0)) {
+      return NextResponse.json(
+        {
+          error:
+            "The nozzle's other reading is still empty — this fix would corrupt the litres. " +
+            "Fill both readings (open the sheet and edit it) instead.",
+        },
+        { status: 400 },
+      );
+    }
+  }
+
+  // Rebuild the sheet's input with the reading(s) replaced, then reuse the
+  // shared schema (normalizes opening < closing) and calc engine.
+  const parsed = entryInputSchema.safeParse({
+    product: existing.product,
+    rate: toNum(existing.rate),
+    ...readings,
     testLitres: toNum(existing.testLitres),
     q2000: existing.q2000,
     q500: existing.q500,

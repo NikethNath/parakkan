@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { alignSide, type Reading } from "./meterAlign";
+import { alignSide, assignFills, type MissingSlot, type Reading } from "./meterAlign";
 
 const r = (v: number): Reading => ({ v, by: "Rajesh", entryId: 1, field: "n1Open" });
 const vals = (cells: ReturnType<typeof alignSide>) => cells.map((c) => c.reading?.v);
@@ -57,5 +57,52 @@ describe("alignSide", () => {
     const cells = alignSide(staff, P, 4);
     expect(cells[1].reading?.v).toBe(P[1] + 1800);
     expect(cells[1].cris).toBe(P[1]);
+  });
+});
+
+describe("assignFills", () => {
+  const slot = (over: Partial<MissingSlot>): MissingSlot => ({
+    by: "Rajesh",
+    entryId: 7,
+    sideField: "n1Close",
+    siblingField: "n1Open",
+    ...over,
+  });
+
+  it("half-filled pair: matches by the sibling reading and writes only the missing field", () => {
+    // Staff wrote the evening opening (midday) for pump P[2] but not the close.
+    const cells = alignSide([r(P[0]), r(P[3])], P, 4);
+    assignFills(cells, [slot({ siblingValue: P[2] - 300 })], []);
+    expect(cells[2].fill).toEqual({
+      by: "Rajesh",
+      entryId: 7,
+      writes: [{ field: "n1Close", value: P[2] }],
+    });
+    expect(cells[1].fill).toBeUndefined();
+  });
+
+  it("blank pair: writes both fields, sibling from the counterpart shift's midday", () => {
+    const midday = P[1] - 250; // morning close for the same pump
+    const cells = alignSide([r(P[0]), r(P[2]), r(P[3])], P, 4);
+    assignFills(cells, [slot({})], [midday, P[3] + 90000]);
+    expect(cells[1].fill?.writes).toEqual([
+      { field: "n1Close", value: P[1] },
+      { field: "n1Open", value: midday },
+    ]);
+  });
+
+  it("blank pair with no midday data falls back to the official value (zero litres)", () => {
+    const cells = alignSide([r(P[0]), r(P[2]), r(P[3])], P, 4);
+    assignFills(cells, [slot({})], []);
+    expect(cells[1].fill?.writes).toEqual([
+      { field: "n1Close", value: P[1] },
+      { field: "n1Open", value: P[1] },
+    ]);
+  });
+
+  it("never proposes a fill on a cell that already has a staff reading", () => {
+    const cells = alignSide(P.map(r), P, 4);
+    assignFills(cells, [slot({ siblingValue: P[2] - 100 }), slot({})], []);
+    expect(cells.every((c) => c.fill === undefined)).toBe(true);
   });
 });

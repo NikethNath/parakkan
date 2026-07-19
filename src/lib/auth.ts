@@ -74,9 +74,22 @@ export async function requireUser(): Promise<SessionUser> {
   return user;
 }
 
+/** Where each role lands after login (and when bounced off a page it can't see). */
+export function homeFor(role: Role): string {
+  return role === "ADMIN" ? "/admin" : role === "ACCOUNTANT" ? "/accounts" : "/employee";
+}
+
 /** Server-component guard: ensures an ADMIN or redirects. */
 export async function requireAdmin(): Promise<SessionUser> {
   const user = await requireUser();
-  if (user.role !== "ADMIN") redirect("/employee");
+  if (user.role !== "ADMIN") redirect(homeFor(user.role));
+  return user;
+}
+
+/** Server-component guard for the accounts area: ACCOUNTANT (or an ADMIN
+ *  having a look) — everyone else is sent to their own home. */
+export async function requireAccountant(): Promise<SessionUser> {
+  const user = await requireUser();
+  if (user.role !== "ACCOUNTANT" && user.role !== "ADMIN") redirect(homeFor(user.role));
   return user;
 }

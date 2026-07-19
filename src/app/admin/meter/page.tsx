@@ -5,7 +5,13 @@ import AutoSubmitDate from "@/components/AutoSubmitDate";
 import AutoSubmitSelect from "@/components/AutoSubmitSelect";
 import CrisMeterFetchForm from "@/components/CrisMeterFetchForm";
 import MeterQuickFix from "@/components/MeterQuickFix";
-import { alignSide, type NozzleField, type Reading } from "@/lib/meterAlign";
+import {
+  alignSide,
+  assignFills,
+  type Fill,
+  type MissingSlot,
+  type Reading,
+} from "@/lib/meterAlign";
 
 const isDate = (s?: string) => /^\d{4}-\d{2}-\d{2}$/.test(s ?? "");
 
@@ -14,7 +20,17 @@ const isDate = (s?: string) => /^\d{4}-\d{2}-\d{2}$/.test(s ?? "");
 const MS_NOZZLES = 4;
 const HSD_NOZZLES = 2;
 
-type Side = { open: Reading[]; close: Reading[] };
+type Side = {
+  open: Reading[];
+  close: Reading[];
+  // Sheet nozzles with no reading for that side — offered a "Fill ← CRIS".
+  missOpen: MissingSlot[];
+  missClose: MissingSlot[];
+  // Midday totalizers (morning closes / evening opens) — used to complete a
+  // fully blank nozzle pair on the other shift's sheet.
+  midFromMorning: number[];
+  midFromEvening: number[];
+};
 type CrisSide = { open: number[]; close: number[] };
 type Row = {
   date: string;
@@ -23,6 +39,15 @@ type Row = {
   // Official CRIS totalizers (sorted ascending, like the staff values).
   cris?: { ms: CrisSide; hsd: CrisSide };
 };
+
+const emptySide = (): Side => ({
+  open: [],
+  close: [],
+  missOpen: [],
+  missClose: [],
+  midFromMorning: [],
+  midFromEvening: [],
+});
 
 const fmt = (n: number | undefined) =>
   n === undefined
@@ -43,25 +68,30 @@ function CrisSub({ staff, cris }: { staff?: number; cris?: number }) {
   return <div className={`text-[10px] leading-tight tabular-nums ${cls}`}>{fmt(cris)}</div>;
 }
 
-/** One table cell: the staff reading, the CRIS subscript, who wrote it, and —
- *  when the reading disagrees with CRIS — a quick-fix button. */
-function ReadingCell({ reading, cris }: { reading?: Reading; cris?: number }) {
+/** One table cell: the staff reading, the CRIS subscript, who wrote it, and a
+ *  quick-fix button — "Fix → CRIS" when the reading disagrees with CRIS, or
+ *  "Fill ← CRIS" when the staff reading is missing but a sheet can take it. */
+function ReadingCell({ reading, cris, fill }: { reading?: Reading; cris?: number; fill?: Fill }) {
   const flagged =
     reading !== undefined && cris !== undefined && Math.abs(reading.v - cris) >= 0.05;
+  // A sheet was submitted with this reading left unfilled → show the 0 the
+  // staff wrote; a dash means no sheet covered this nozzle at all.
+  const by = reading?.by ?? fill?.by;
   return (
     <>
-      {fmt(reading?.v)}
+      {reading ? fmt(reading.v) : fill ? fmt(0) : "—"}
       <CrisSub staff={reading?.v} cris={cris} />
-      {reading && (
-        <div className="text-[10px] leading-tight text-faint">{reading.by}</div>
-      )}
+      {by && <div className="text-[10px] leading-tight text-faint">{by}</div>}
       {flagged && (
         <MeterQuickFix
           entryId={reading.entryId}
-          field={reading.field}
+          writes={[{ field: reading.field, value: cris }]}
           from={reading.v}
-          to={cris}
+          by={reading.by}
         />
+      )}
+      {!reading && fill && (
+        <MeterQuickFix entryId={fill.entryId} writes={fill.writes} by={fill.by} />
       )}
     </>
   );
@@ -138,7 +168,7 @@ export default async function MeterPage({
   const rowFor = (d: string) => {
     const row =
       map.get(d) ??
-      ({ date: d, ms: { open: [], close: [] }, hsd: { open: [], close: [] } } as Row);
+      ({ date: d, ms: emptySide(), hsd: emptySide() } as Row);
     map.set(d, row);
     return row;
   };
@@ -150,25 +180,41 @@ export default async function MeterPage({
     // pair may surface its opening from nClose) so quick-fix edits the right one.
     const n1o = toNum(e.n1Open), n1c = toNum(e.n1Close);
     const n2o = toNum(e.n2Open), n2c = toNum(e.n2Close);
-    // A totalizer is never 0 — a 0/0 nozzle pair means "not used / not
-    // recorded" (e.g. the pump was down), so it doesn't produce a reading.
+    // Per nozzle pair: a totalizer is never 0, so a 0 means "not recorded".
+    // Both filled → swap-resolved reading (staff sometimes switch the columns).
+    // Only this side filled → shown as-is. This side missing → a MissingSlot,
+    // which becomes a "Fill ← CRIS" button on the official-only cell.
+    const pairs = [
+      { o: n1o, c: n1c, fo: "n1Open", fc: "n1Close" },
+      { o: n2o, c: n2c, fo: "n2Open", fc: "n2Close" },
+    ] as const;
     if (e.shift === "MORNING") {
-      const v1 = pickOpening(n1o, n1c);
-      const v2 = pickOpening(n2o, n2c);
-      for (const r of [
-        { v: v1, by, entryId: e.id, field: (v1 === n1o ? "n1Open" : "n1Close") as NozzleField },
-        { v: v2, by, entryId: e.id, field: (v2 === n2o ? "n2Open" : "n2Close") as NozzleField },
-      ]) {
-        if (r.v > 0) side.open.push(r);
+      for (const p of pairs) {
+        if (p.o > 0 && p.c > 0) {
+          const v = pickOpening(p.o, p.c);
+          side.open.push({ v, by, entryId: e.id, field: v === p.o ? p.fo : p.fc });
+          side.midFromMorning.push(pickClosing(p.o, p.c)); // morning close = midday
+        } else if (p.o > 0) {
+          side.open.push({ v: p.o, by, entryId: e.id, field: p.fo });
+        } else if (p.c > 0) {
+          side.missOpen.push({ by, entryId: e.id, sideField: p.fo, siblingField: p.fc, siblingValue: p.c });
+        } else {
+          side.missOpen.push({ by, entryId: e.id, sideField: p.fo, siblingField: p.fc });
+        }
       }
     } else {
-      const v1 = pickClosing(n1o, n1c);
-      const v2 = pickClosing(n2o, n2c);
-      for (const r of [
-        { v: v1, by, entryId: e.id, field: (v1 === n1c ? "n1Close" : "n1Open") as NozzleField },
-        { v: v2, by, entryId: e.id, field: (v2 === n2c ? "n2Close" : "n2Open") as NozzleField },
-      ]) {
-        if (r.v > 0) side.close.push(r);
+      for (const p of pairs) {
+        if (p.o > 0 && p.c > 0) {
+          const v = pickClosing(p.o, p.c);
+          side.close.push({ v, by, entryId: e.id, field: v === p.c ? p.fc : p.fo });
+          side.midFromEvening.push(pickOpening(p.o, p.c)); // evening open = midday
+        } else if (p.c > 0) {
+          side.close.push({ v: p.c, by, entryId: e.id, field: p.fc });
+        } else if (p.o > 0) {
+          side.missClose.push({ by, entryId: e.id, sideField: p.fc, siblingField: p.fo, siblingValue: p.o });
+        } else {
+          side.missClose.push({ by, entryId: e.id, sideField: p.fc, siblingField: p.fo });
+        }
       }
     }
   }
@@ -262,7 +308,10 @@ export default async function MeterPage({
                 <span className="text-emerald-600 dark:text-emerald-400">green = matches</span> ·{" "}
                 <span className="text-red-600 dark:text-red-400">red = staff entered something
                 different</span> — its <strong>Fix → CRIS</strong> button replaces the staff
-                reading with the official one (recalculated &amp; logged) ·{" "}
+                reading with the official one (recalculated &amp; logged) · a reading the
+                staff submitted but left unfilled shows as 0 with a{" "}
+                <strong>Fill ← CRIS</strong> button that writes the official reading(s)
+                into that sheet · a dash means no sheet covered that nozzle ·{" "}
               </>
             )}
             The name under a reading is the staff member who wrote that sheet.
@@ -311,6 +360,16 @@ export default async function MeterPage({
                   {rows.map((r) => {
                     const msCells = alignSide(r.ms[view], r.cris?.ms[view], MS_NOZZLES);
                     const hsdCells = alignSide(r.hsd[view], r.cris?.hsd[view], HSD_NOZZLES);
+                    // Official-only cells offer to fill the sheet's missing
+                    // reading(s); a blank pair completes its other side from
+                    // the counterpart shift's midday totalizer.
+                    if (view === "open") {
+                      assignFills(msCells, r.ms.missOpen, r.ms.midFromEvening);
+                      assignFills(hsdCells, r.hsd.missOpen, r.hsd.midFromEvening);
+                    } else {
+                      assignFills(msCells, r.ms.missClose, r.ms.midFromMorning);
+                      assignFills(hsdCells, r.hsd.missClose, r.hsd.midFromMorning);
+                    }
                     return (
                       <tr key={r.date} className="border-t border-border">
                         <td className="whitespace-nowrap px-2 py-1.5 align-top text-muted">
@@ -321,7 +380,7 @@ export default async function MeterPage({
                             key={`ms${i}`}
                             className="px-2 py-1.5 text-right tabular-nums text-foreground"
                           >
-                            <ReadingCell reading={msCells[i].reading} cris={msCells[i].cris} />
+                            <ReadingCell {...msCells[i]} />
                           </td>
                         ))}
                         {hsdCols.map((i) => (
@@ -332,7 +391,7 @@ export default async function MeterPage({
                               (i === 0 ? " border-l border-border" : "")
                             }
                           >
-                            <ReadingCell reading={hsdCells[i].reading} cris={hsdCells[i].cris} />
+                            <ReadingCell {...hsdCells[i]} />
                           </td>
                         ))}
                       </tr>

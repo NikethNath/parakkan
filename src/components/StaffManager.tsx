@@ -3,20 +3,28 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+export type StaffRole = "EMPLOYEE" | "ADMIN" | "ACCOUNTANT";
+
 export type Staff = {
   id: number;
   name: string;
   username: string;
-  role: "EMPLOYEE" | "ADMIN";
+  role: StaffRole;
   phone: string | null;
   active: boolean;
+};
+
+const roleLabel: Record<StaffRole, string> = {
+  EMPLOYEE: "Employee",
+  ADMIN: "Admin",
+  ACCOUNTANT: "Accountant",
 };
 
 type FormState = {
   name: string;
   username: string;
   password: string;
-  role: "EMPLOYEE" | "ADMIN";
+  role: StaffRole;
   phone: string;
 };
 
@@ -94,6 +102,26 @@ export default function StaffManager({ initialStaff }: { initialStaff: Staff[] }
     }
   }
 
+  async function remove(s: Staff) {
+    if (
+      !confirm(
+        `Remove ${s.name}?\n\nIf they have records in the books the account is archived: ` +
+          "their past sheets stay untouched, but they disappear from every list and their " +
+          `username "${s.username}" is freed — a new hire reusing it starts with zero ` +
+          "short/excess and attendance.\n\nSomeone with no records is permanently deleted.",
+      )
+    )
+      return;
+    const res = await fetch(`/api/staff/${s.id}`, { method: "DELETE" });
+    const d = await res.json().catch(() => ({}));
+    if (res.ok) {
+      if (d.archived && d.message) alert(d.message);
+      router.refresh();
+    } else {
+      alert(d.error ?? "Could not delete");
+    }
+  }
+
   async function toggleActive(s: Staff) {
     if (s.active && !confirm(`Deactivate ${s.name}? Their past records are kept.`)) return;
     const res = await fetch(`/api/staff/${s.id}`, {
@@ -152,6 +180,7 @@ export default function StaffManager({ initialStaff }: { initialStaff: Staff[] }
               <select value={form.role} onChange={(e) => set("role", e.target.value)} className={inp}>
                 <option value="EMPLOYEE">Employee</option>
                 <option value="ADMIN">Admin</option>
+                <option value="ACCOUNTANT">Accountant (read-only summary)</option>
               </select>
             </Field>
           </div>
@@ -197,7 +226,7 @@ export default function StaffManager({ initialStaff }: { initialStaff: Staff[] }
                 >
                   <td className="px-2 py-1.5 font-medium text-foreground">{s.name}</td>
                   <td className="px-2 py-1.5 text-muted">{s.username}</td>
-                  <td className="px-2 py-1.5">{s.role === "ADMIN" ? "Admin" : "Employee"}</td>
+                  <td className="px-2 py-1.5">{roleLabel[s.role]}</td>
                   <td className="px-2 py-1.5">
                     {s.active ? (
                       <span className="text-emerald-600 dark:text-emerald-400">Active</span>
@@ -214,9 +243,15 @@ export default function StaffManager({ initialStaff }: { initialStaff: Staff[] }
                     </button>
                     <button
                       onClick={() => toggleActive(s)}
-                      className="font-medium text-muted hover:underline"
+                      className="mr-3 font-medium text-muted hover:underline"
                     >
                       {s.active ? "Deactivate" : "Activate"}
+                    </button>
+                    <button
+                      onClick={() => remove(s)}
+                      className="font-medium text-red-600 hover:underline dark:text-red-400"
+                    >
+                      Delete
                     </button>
                   </td>
                 </tr>

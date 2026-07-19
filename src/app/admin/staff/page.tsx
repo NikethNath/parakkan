@@ -3,6 +3,7 @@ import StaffManager, { type Staff } from "@/components/StaffManager";
 
 export default async function StaffPage() {
   const users = await prisma.user.findMany({
+    where: { archivedAt: null }, // archived ex-staff are gone from this list
     orderBy: [{ active: "desc" }, { name: "asc" }],
   });
   const staff: Staff[] = users.map((u) => ({
