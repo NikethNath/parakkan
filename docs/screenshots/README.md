@@ -1,8 +1,14 @@
 # Screenshot shot list
 
-Drop PNGs here with these exact filenames (they're referenced from the root
-README). **Use seeded demo data only** — never real figures, and never any page
-showing customer names, phone numbers, or vehicle numbers.
+**Regenerate everything with `npm run screenshots`** (needs the local Postgres
+container up and Chrome installed). The script — [scripts/screenshots.ts](../../scripts/screenshots.ts) —
+seeds a throwaway database with demo data, drives headless Chrome through every
+page below, and overwrites these PNGs. Run it after any visual change so the
+README stays current.
+
+The filenames are referenced from the root README. If you ever capture one by
+hand instead: **use seeded demo data only** — never real figures, and never any
+page showing customer names, phone numbers, or vehicle numbers.
 
 | File | Page | Viewport |
 |------|------|----------|

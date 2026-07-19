@@ -76,14 +76,9 @@ against the oil company's official records and the bank statement, and audited.
 | ![Meter tab](docs/screenshots/meter-cris.png) <br> **Meter vs CRIS** — official totalizers in subscript, mismatches flagged red with one-click fix | ![CRIS comparison](docs/screenshots/cris-compare.png) <br> **CRIS sales reconciliation** — staff litres vs the oil company's records |
 | ![Bank reconciliation](docs/screenshots/bank-reconcile.png) <br> **GPay / POS reconciliation** — bank settlements matched to daily sheets | ![Short/excess statement](docs/screenshots/salary.png) <br> **Short/excess statement** — an employee's period totals for payroll, printable |
 
-<!--
-To (re)take these:
-  1. npm run db:reset  (fresh DB with demo users — NEVER screenshot real data;
-     the bank statement and CRIS exports contain customer phone/vehicle numbers)
-  2. npm run dev, log in as a seeded employee and submit 2–3 made-up sheets first
-  3. Employee shots at a ~390px-wide viewport (it's used on phones), admin shots at desktop width
-  4. Save as docs/screenshots/<name>.png matching the filenames above
--->
+<!-- Regenerate all of these after a visual change with `npm run screenshots`
+     (scripts/screenshots.ts — seeds a throwaway DB with demo data and drives
+     headless Chrome through every page; real data is never touched). -->
 
 ---
 

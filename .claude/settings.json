@@ -13,7 +13,8 @@
       "Bash(DATABASE_URL=\"postgresql://hpcl:hpcl@localhost:5433/hpcl_demo\" ADMIN_USERNAME=admin ADMIN_PASSWORD=changeme123 npx tsx prisma/seed.ts)",
       "Bash(DATABASE_URL=\"postgresql://hpcl:hpcl@localhost:5433/hpcl_demo\" npx tsx /tmp/claude-1000/-home-tempest-Desktop-hpcl-outlet-accounting/6e732945-b68d-4cc3-a428-e14e77ccfe11/scratchpad/seed-demo.ts)",
       "Bash(DATABASE_URL=\"postgresql://hpcl:hpcl@localhost:5433/hpcl_demo\" npm run dev)",
-      "Bash(sort -k1 -h)"
+      "Bash(sort -k1 -h)",
+      "Bash(npm run *)"
     ]
   }
 }

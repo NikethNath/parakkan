@@ -5,6 +5,7 @@ import AutoSubmitDate from "@/components/AutoSubmitDate";
 import AutoSubmitSelect from "@/components/AutoSubmitSelect";
 import CrisMeterFetchForm from "@/components/CrisMeterFetchForm";
 import MeterQuickFix from "@/components/MeterQuickFix";
+import { alignSide, type NozzleField, type Reading } from "@/lib/meterAlign";
 
 const isDate = (s?: string) => /^\d{4}-\d{2}-\d{2}$/.test(s ?? "");
 
@@ -13,10 +14,6 @@ const isDate = (s?: string) => /^\d{4}-\d{2}-\d{2}$/.test(s ?? "");
 const MS_NOZZLES = 4;
 const HSD_NOZZLES = 2;
 
-type NozzleField = "n1Open" | "n1Close" | "n2Open" | "n2Close";
-// A staff reading keeps the name of whoever wrote the sheet it came from, plus
-// which entry/field holds it so a flagged value can be quick-fixed in place.
-type Reading = { v: number; by: string; entryId: number; field: NozzleField };
 type Side = { open: Reading[]; close: Reading[] };
 type CrisSide = { open: number[]; close: number[] };
 type Row = {
@@ -32,9 +29,9 @@ const fmt = (n: number | undefined) =>
     ? "—"
     : n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-/** Subscript under a staff reading: the CRIS official totalizer for the same
- *  (sorted) position — green when it matches (within 0.05), red when it's off
- *  by 0.05 or more. */
+/** Subscript under a staff reading: the official CRIS totalizer this reading
+ *  was paired with — green when it matches (within 0.05), red when it's off by
+ *  0.05 or more, grey when the nozzle has no staff reading at all. */
 function CrisSub({ staff, cris }: { staff?: number; cris?: number }) {
   if (cris === undefined) return null;
   const cls =
@@ -153,20 +150,26 @@ export default async function MeterPage({
     // pair may surface its opening from nClose) so quick-fix edits the right one.
     const n1o = toNum(e.n1Open), n1c = toNum(e.n1Close);
     const n2o = toNum(e.n2Open), n2c = toNum(e.n2Close);
+    // A totalizer is never 0 — a 0/0 nozzle pair means "not used / not
+    // recorded" (e.g. the pump was down), so it doesn't produce a reading.
     if (e.shift === "MORNING") {
       const v1 = pickOpening(n1o, n1c);
       const v2 = pickOpening(n2o, n2c);
-      side.open.push(
-        { v: v1, by, entryId: e.id, field: v1 === n1o ? "n1Open" : "n1Close" },
-        { v: v2, by, entryId: e.id, field: v2 === n2o ? "n2Open" : "n2Close" },
-      );
+      for (const r of [
+        { v: v1, by, entryId: e.id, field: (v1 === n1o ? "n1Open" : "n1Close") as NozzleField },
+        { v: v2, by, entryId: e.id, field: (v2 === n2o ? "n2Open" : "n2Close") as NozzleField },
+      ]) {
+        if (r.v > 0) side.open.push(r);
+      }
     } else {
       const v1 = pickClosing(n1o, n1c);
       const v2 = pickClosing(n2o, n2c);
-      side.close.push(
-        { v: v1, by, entryId: e.id, field: v1 === n1c ? "n1Close" : "n1Open" },
-        { v: v2, by, entryId: e.id, field: v2 === n2c ? "n2Close" : "n2Open" },
-      );
+      for (const r of [
+        { v: v1, by, entryId: e.id, field: (v1 === n1c ? "n1Close" : "n1Open") as NozzleField },
+        { v: v2, by, entryId: e.id, field: (v2 === n2c ? "n2Close" : "n2Open") as NozzleField },
+      ]) {
+        if (r.v > 0) side.close.push(r);
+      }
     }
   }
   for (const c of crisReadings) {
@@ -254,7 +257,8 @@ export default async function MeterPage({
             {hasCris && (
               <>
                 Small figure under a reading = the official CRIS reading for that nozzle
-                (both sorted low → high) ·{" "}
+                (each staff reading is matched to the nearest official totalizer, so an
+                unused nozzle shows just the official figure in grey) ·{" "}
                 <span className="text-emerald-600 dark:text-emerald-400">green = matches</span> ·{" "}
                 <span className="text-red-600 dark:text-red-400">red = staff entered something
                 different</span> — its <strong>Fix → CRIS</strong> button replaces the staff
@@ -304,32 +308,36 @@ export default async function MeterPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((r) => (
-                    <tr key={r.date} className="border-t border-border">
-                      <td className="whitespace-nowrap px-2 py-1.5 align-top text-muted">
-                        {dayLabel(r.date)}
-                      </td>
-                      {msCols.map((i) => (
-                        <td
-                          key={`ms${i}`}
-                          className="px-2 py-1.5 text-right tabular-nums text-foreground"
-                        >
-                          <ReadingCell reading={r.ms[view][i]} cris={r.cris?.ms[view][i]} />
+                  {rows.map((r) => {
+                    const msCells = alignSide(r.ms[view], r.cris?.ms[view], MS_NOZZLES);
+                    const hsdCells = alignSide(r.hsd[view], r.cris?.hsd[view], HSD_NOZZLES);
+                    return (
+                      <tr key={r.date} className="border-t border-border">
+                        <td className="whitespace-nowrap px-2 py-1.5 align-top text-muted">
+                          {dayLabel(r.date)}
                         </td>
-                      ))}
-                      {hsdCols.map((i) => (
-                        <td
-                          key={`hsd${i}`}
-                          className={
-                            "px-2 py-1.5 text-right tabular-nums text-foreground" +
-                            (i === 0 ? " border-l border-border" : "")
-                          }
-                        >
-                          <ReadingCell reading={r.hsd[view][i]} cris={r.cris?.hsd[view][i]} />
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
+                        {msCols.map((i) => (
+                          <td
+                            key={`ms${i}`}
+                            className="px-2 py-1.5 text-right tabular-nums text-foreground"
+                          >
+                            <ReadingCell reading={msCells[i].reading} cris={msCells[i].cris} />
+                          </td>
+                        ))}
+                        {hsdCols.map((i) => (
+                          <td
+                            key={`hsd${i}`}
+                            className={
+                              "px-2 py-1.5 text-right tabular-nums text-foreground" +
+                              (i === 0 ? " border-l border-border" : "")
+                            }
+                          >
+                            <ReadingCell reading={hsdCells[i].reading} cris={hsdCells[i].cris} />
+                          </td>
+                        ))}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
