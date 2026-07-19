@@ -6,7 +6,14 @@
       "Bash(NODE_PATH=__TRACKED_VAR__/node_modules node -e ' *)",
       "Bash(NODE_PATH=__TRACKED_VAR__/node_modules npx tsx -e ' *)",
       "Bash(npx prisma *)",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/admin/meter)"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/admin/meter)",
+      "Bash(docker compose *)",
+      "Bash(npx tsx *)",
+      "Bash(DATABASE_URL=\"postgresql://hpcl:hpcl@localhost:5433/hpcl_demo\" npx prisma migrate deploy)",
+      "Bash(DATABASE_URL=\"postgresql://hpcl:hpcl@localhost:5433/hpcl_demo\" ADMIN_USERNAME=admin ADMIN_PASSWORD=changeme123 npx tsx prisma/seed.ts)",
+      "Bash(DATABASE_URL=\"postgresql://hpcl:hpcl@localhost:5433/hpcl_demo\" npx tsx /tmp/claude-1000/-home-tempest-Desktop-hpcl-outlet-accounting/6e732945-b68d-4cc3-a428-e14e77ccfe11/scratchpad/seed-demo.ts)",
+      "Bash(DATABASE_URL=\"postgresql://hpcl:hpcl@localhost:5433/hpcl_demo\" npm run dev)",
+      "Bash(sort -k1 -h)"
     ]
   }
 }
