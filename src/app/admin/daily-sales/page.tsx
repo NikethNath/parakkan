@@ -1,8 +1,11 @@
 import { prisma } from "@/lib/db";
+import { crisStatus } from "@/lib/crisCreds";
 import { toNum, istToday, dayLabel } from "@/lib/format";
 import AutoSubmitDate from "@/components/AutoSubmitDate";
 import AutoSubmitSelect from "@/components/AutoSubmitSelect";
 import PrintButton from "@/components/PrintButton";
+import CrisMonthFetchButton from "@/components/CrisMonthFetchButton";
+import CrisDailyEditButton from "@/components/CrisDailyEditButton";
 
 /**
  * DSR "Daily sales" — the digital version of the paper Daily Sales Register,
@@ -27,7 +30,15 @@ const L = (n: number | undefined) =>
     : n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 type DsrRow = {
+  id: number;
   date: string;
+  edit: {
+    openingStock: number | null;
+    receiptQty: number | null;
+    closingStock: number | null;
+    officialSaleLitres: number;
+    testLitres: number;
+  };
   opening?: number;
   receipt?: number;
   total?: number;
@@ -54,10 +65,13 @@ export default async function DailySalesPage({
   // next-day opening stock.
   const endPlus = new Date(end.getTime() + 86400000);
 
-  const days = await prisma.crisDaily.findMany({
-    where: { product, businessDate: { gte: start, lt: endPlus } },
-    orderBy: { businessDate: "asc" },
-  });
+  const [days, { configured }] = await Promise.all([
+    prisma.crisDaily.findMany({
+      where: { product, businessDate: { gte: start, lt: endPlus } },
+      orderBy: { businessDate: "asc" },
+    }),
+    crisStatus(),
+  ]);
 
   const inMonth = days.filter((d) => d.businessDate < end);
   const openingByTime = new Map(
@@ -92,7 +106,15 @@ export default async function DailySalesPage({
     if (variation !== undefined) cumVariation += variation;
 
     return {
+      id: d.id,
       date: d.businessDate.toISOString().slice(0, 10),
+      edit: {
+        openingStock: d.openingStock === null ? null : toNum(d.openingStock),
+        receiptQty: d.receiptQty === null ? null : toNum(d.receiptQty),
+        closingStock: d.closingStock === null ? null : toNum(d.closingStock),
+        officialSaleLitres: netMeter,
+        testLitres: test,
+      },
       opening,
       receipt,
       total,
@@ -147,7 +169,10 @@ export default async function DailySalesPage({
             </AutoSubmitSelect>
           </label>
         </form>
-        {rows.length > 0 && <PrintButton />}
+        <div className="flex items-start gap-3">
+          <CrisMonthFetchButton month={month} configured={configured} />
+          {rows.length > 0 && <PrintButton />}
+        </div>
       </div>
 
       <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
@@ -188,6 +213,7 @@ export default async function DailySalesPage({
                   <th className="px-2 py-1.5 text-right font-medium">Sales by dip</th>
                   <th className="px-2 py-1.5 text-right font-medium">Variation</th>
                   <th className="px-2 py-1.5 text-right font-medium">Cum. variation</th>
+                  <th className="px-2 py-1.5 print:hidden"></th>
                 </tr>
               </thead>
               <tbody>
@@ -212,6 +238,13 @@ export default async function DailySalesPage({
                     </td>
                     <td className={`px-2 py-1.5 text-right tabular-nums ${vCls(r.cumVariation)}`}>
                       {L(r.cumVariation)}
+                    </td>
+                    <td className="px-2 py-1.5 text-right print:hidden">
+                      <CrisDailyEditButton
+                        id={r.id}
+                        label={`${dayLabel(r.date)} · ${product}`}
+                        values={r.edit}
+                      />
                     </td>
                   </tr>
                 ))}
