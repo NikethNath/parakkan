@@ -23,6 +23,7 @@ const items: Item[] = [
   {
     label: "DSR",
     children: [
+      { href: "/admin/daily-sales", label: "Daily sales" },
       { href: "/admin/meter", label: "Meter" },
       { href: "/admin/dip", label: "Dip chart" },
       { href: "/admin/astm", label: "ASTM 3B" },

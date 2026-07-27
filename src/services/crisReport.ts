@@ -15,6 +15,11 @@ export interface CrisRow {
   netTotalizerLitres: number;
   testLitres: number;
   totalizerLitres: number;
+  // Tank stock columns (litres) — drive the DSR "Daily sales" register.
+  // Undefined when the sheet predates these columns / lacks the headers.
+  openingStock?: number;
+  receiptQty?: number;
+  closingStock?: number;
 }
 
 export interface CrisReport {
@@ -93,6 +98,9 @@ export function parseCrisReport(buf: Buffer | ArrayBuffer): CrisReport {
   const iNet = find(/net totalizer sales/i);
   const iTest = find(/testing summary/i);
   const iTot = find(/totalizer sales quantity/i);
+  const iOpen = find(/^opening stock/i);
+  const iReceipt = find(/receipt quantity/i);
+  const iClose = find(/^closing stock/i);
 
   const rows: CrisRow[] = [];
   for (const r of aoa.slice(hIdx + 1)) {
@@ -106,6 +114,9 @@ export function parseCrisReport(buf: Buffer | ArrayBuffer): CrisReport {
       netTotalizerLitres: num(r[iNet]),
       testLitres: num(r[iTest]),
       totalizerLitres: num(r[iTot]),
+      openingStock: iOpen === -1 ? undefined : num(r[iOpen]),
+      receiptQty: iReceipt === -1 ? undefined : num(r[iReceipt]),
+      closingStock: iClose === -1 ? undefined : num(r[iClose]),
     });
   }
 

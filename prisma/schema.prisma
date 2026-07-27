@@ -271,6 +271,11 @@ model CrisDaily {
   officialSaleAmount Decimal  @db.Decimal(14, 2)
   officialSaleLitres Decimal  @db.Decimal(14, 3)
   testLitres         Decimal  @default(0) @db.Decimal(12, 3)
+  // Tank stock from the CRIS Daily Sales report — drives the DSR "Daily
+  // sales" register. Null on rows cached before these columns existed.
+  openingStock       Decimal? @db.Decimal(14, 3)
+  receiptQty         Decimal? @db.Decimal(14, 3)
+  closingStock       Decimal? @db.Decimal(14, 3)
   raw                Json?
   fetchedAt          DateTime @default(now())
 

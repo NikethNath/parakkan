@@ -55,6 +55,30 @@ describe("parseCrisReport", () => {
     expect(ms1?.netTotalizerLitres).toBe(1000);
   });
 
+  it("extracts the tank stock columns (opening/receipt/closing)", () => {
+    const hsd1 = r.rows.find((x) => x.product === "HSD" && x.businessDate === "2026-06-01");
+    expect(hsd1?.openingStock).toBe(14824.6);
+    expect(hsd1?.receiptQty).toBe(0);
+    expect(hsd1?.closingStock).toBe(11138.2);
+    const hsd2 = r.rows.find((x) => x.product === "HSD" && x.businessDate === "2026-06-02");
+    expect(hsd2?.receiptQty).toBe(4000);
+  });
+
+  it("leaves stock fields undefined when the sheet lacks those columns", () => {
+    const slim = [
+      aoa[0],
+      aoa[1],
+      aoa[2],
+      ["S.no", "Product", "Date", "Net Totalizer Sales (Ltrs.)", "Testing Summary (Ltrs.)", "Totalizer Sales Quantity (Ltrs.) Summary"],
+      [1, "HSD", "01-06-2026", 3669.84, 10, 3679.84],
+    ];
+    const row = parseCrisReport(buildXlsx(slim)).rows[0];
+    expect(row.netTotalizerLitres).toBe(3669.84);
+    expect(row.openingStock).toBeUndefined();
+    expect(row.receiptQty).toBeUndefined();
+    expect(row.closingStock).toBeUndefined();
+  });
+
   it("keeps only MS/HSD rows (skips totals/footers)", () => {
     expect(r.rows.every((x) => x.product === "MS" || x.product === "HSD")).toBe(true);
   });
