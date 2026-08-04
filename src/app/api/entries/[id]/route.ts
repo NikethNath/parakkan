@@ -12,6 +12,9 @@ const metaSchema = z.object({
   shift: z.enum(SHIFTS),
   verify: z.boolean().optional(),
   partnerId: z.number().int().positive().nullable().optional(),
+  // Admin-only: reassign the sheet to another staff member (it was filed under
+  // the wrong name — e.g. someone else's session was still open on the phone).
+  employeeId: z.number().int().positive().optional(),
 });
 
 const toDate = (s: string) => new Date(`${s}T00:00:00.000Z`);
@@ -136,10 +139,24 @@ export async function PATCH(
   // it's pinned to whatever it already was. Admins can still re-date a sheet.
   const businessDate = isAdmin ? meta.data.businessDate : isoDate(existing.businessDate);
 
+  // Who the sheet belongs to. Only an admin can move it to another person;
+  // everything keyed off the owner (short/excess, attendance, their history)
+  // follows automatically below.
+  const employeeId = isAdmin ? (meta.data.employeeId ?? existing.employeeId) : existing.employeeId;
+  if (employeeId !== existing.employeeId) {
+    const target = await prisma.user.findFirst({
+      where: { id: employeeId, role: "EMPLOYEE", archivedAt: null },
+      select: { id: true },
+    });
+    if (!target) {
+      return NextResponse.json({ error: "Unknown staff member." }, { status: 400 });
+    }
+  }
+
   // Optional partner (second person on the DU). Employees may set/clear it too.
   const partnerId = meta.data.partnerId ?? null;
   if (partnerId != null) {
-    if (partnerId === existing.employeeId) {
+    if (partnerId === employeeId) {
       return NextResponse.json({ error: "Partner can't be the same person." }, { status: 400 });
     }
     const p = await prisma.user.findFirst({
@@ -175,6 +192,23 @@ export async function PATCH(
   cmpNum("creditTotal", existing.creditTotal, c.creditTotal);
   cmpNum("fuelExpected", existing.fuelExpected, c.fuelExpected);
   cmpNum("shortExcess", existing.shortExcess, c.shortExcess);
+
+  // Reassignment — logged with names (it moves salary impact and attendance).
+  if (isAdmin && employeeId !== existing.employeeId) {
+    const names = Object.fromEntries(
+      (
+        await prisma.user.findMany({
+          where: { id: { in: [existing.employeeId, employeeId] } },
+          select: { id: true, name: true },
+        })
+      ).map((u) => [u.id, u.name] as const),
+    );
+    audits.push({
+      field: "employee",
+      oldValue: names[existing.employeeId] ?? String(existing.employeeId),
+      newValue: names[employeeId] ?? String(employeeId),
+    });
+  }
 
   // Partner change — logged for admins with names (it moves the 50/50 split).
   if (isAdmin && (existing.partnerId ?? null) !== partnerId) {
@@ -213,6 +247,7 @@ export async function PATCH(
           businessDate: toDate(businessDate),
           shift: meta.data.shift,
           product: input.product,
+          employeeId,
           partnerId,
           rate: input.rate,
           n1Open: input.n1Open,
@@ -292,7 +327,7 @@ export async function PATCH(
           shift: existing.shift,
         },
         {
-          employeeId: existing.employeeId,
+          employeeId,
           partnerId,
           date: toDate(businessDate),
           shift: meta.data.shift,
@@ -309,7 +344,11 @@ export async function PATCH(
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
       return NextResponse.json(
-        { error: "Another sheet already exists for that date, shift and product." },
+        {
+          error:
+            "That staff member already has a sheet for this date, shift and product — " +
+            "delete or re-date one of them first.",
+        },
         { status: 409 },
       );
     }

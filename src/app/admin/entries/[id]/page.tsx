@@ -20,6 +20,7 @@ export default async function AdminEntryDetail({
     include: {
       employee: { select: { name: true, username: true } },
       partner: { select: { name: true } },
+      enteredBy: { select: { name: true } },
       oilLines: true,
       expenseLines: true,
       salaryLines: true,
@@ -33,8 +34,16 @@ export default async function AdminEntryDetail({
   });
   if (!entry) notFound();
 
+  // Everyone selectable as owner or partner — including this sheet's current
+  // owner (the form filters each dropdown against the other's selection), and
+  // including the current owner even if since deactivated, so an old sheet
+  // still shows the right name.
   const employees = await prisma.user.findMany({
-    where: { role: "EMPLOYEE", active: true, id: { not: entry.employeeId } },
+    where: {
+      role: "EMPLOYEE",
+      archivedAt: null,
+      OR: [{ active: true }, { id: entry.employeeId }],
+    },
     orderBy: { name: "asc" },
     select: { id: true, name: true },
   });
@@ -46,6 +55,7 @@ export default async function AdminEntryDetail({
       businessDate: isoDate(entry.businessDate),
       shift: entry.shift,
       product: entry.product,
+      employeeId: String(entry.employeeId),
       partnerId: entry.partnerId ? String(entry.partnerId) : "NONE",
       rate: s(entry.rate),
       n1Open: s(entry.n1Open),
@@ -106,6 +116,11 @@ export default async function AdminEntryDetail({
               })}{" "}
               · {entry.shift === "MORNING" ? "Morning" : "Evening"} · {entry.product}
             </p>
+            {entry.enteredBy && (
+              <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">
+                ✍ Typed by {entry.enteredBy.name} on {entry.employee.name}&apos;s behalf
+              </p>
+            )}
             <p className="mt-0.5 text-xs text-faint">
               Submitted {istDateTime(entry.submittedAt)} IST
               {entry.verifiedAt

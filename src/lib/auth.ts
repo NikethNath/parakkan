@@ -5,7 +5,18 @@ import bcrypt from "bcryptjs";
 import type { Role } from "@prisma/client";
 
 const COOKIE = "hpcl_session";
-const MAX_AGE = 60 * 60 * 24 * 30; // 30 days
+// Employee sessions are deliberately short, and absolute (not extended by
+// activity): the outlet shares one phone between staff, and a login left open
+// used to survive into the next day, so the next person's sheet was filed
+// under the previous person's name. A session that can't outlive a shift makes
+// that impossible. Admins (and the read-only accountant, who cannot file a
+// sheet at all) keep a long session — they work from their own devices and
+// being signed out mid-task is pure friction.
+const EMPLOYEE_MAX_AGE = 60 * 60 * 2; // 2 hours
+const LONG_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
+
+export const sessionMaxAge = (role: Role): number =>
+  role === "EMPLOYEE" ? EMPLOYEE_MAX_AGE : LONG_MAX_AGE;
 
 function secret(): Uint8Array {
   const s = process.env.SESSION_SECRET;
@@ -29,10 +40,11 @@ export async function verifyPassword(pw: string, hash: string): Promise<boolean>
 }
 
 export async function createSession(user: SessionUser): Promise<void> {
+  const maxAge = sessionMaxAge(user.role);
   const token = await new SignJWT({ ...user })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime(`${MAX_AGE}s`)
+    .setExpirationTime(`${maxAge}s`)
     .sign(secret());
 
   const jar = await cookies();
@@ -41,7 +53,7 @@ export async function createSession(user: SessionUser): Promise<void> {
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: MAX_AGE,
+    maxAge,
   });
 }
 

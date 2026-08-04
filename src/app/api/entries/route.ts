@@ -12,6 +12,11 @@ const metaSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),
   shift: z.enum(SHIFTS),
   partnerId: z.number().int().positive().nullable().optional(),
+  // Whose shift this is. Staff who aren't comfortable with a phone have a
+  // colleague file for them, so the sheet's owner is chosen on the form rather
+  // than assumed from the login (that assumption is what produced sheets in
+  // the wrong person's name). Defaults to the person filing.
+  employeeId: z.number().int().positive().optional(),
 });
 
 function toDate(yyyyMmDd: string): Date {
@@ -41,10 +46,25 @@ export async function POST(req: Request) {
   const input = entry.data;
   const c = computeEntry(input);
 
+  // Whose sheet this is (defaults to the person filing it).
+  const employeeId = meta.data.employeeId ?? user.uid;
+  if (employeeId !== user.uid) {
+    const owner = await prisma.user.findFirst({
+      where: { id: employeeId, role: "EMPLOYEE", active: true, archivedAt: null },
+      select: { id: true },
+    });
+    if (!owner) {
+      return NextResponse.json(
+        { error: "Pick a valid staff member for this shift." },
+        { status: 400 },
+      );
+    }
+  }
+
   // Optional partner (second person on the same DU) — must be another employee.
   const partnerId = meta.data.partnerId ?? null;
   if (partnerId != null) {
-    if (partnerId === user.uid) {
+    if (partnerId === employeeId) {
       return NextResponse.json({ error: "Partner can't be the same person." }, { status: 400 });
     }
     const p = await prisma.user.findFirst({
@@ -60,8 +80,10 @@ export async function POST(req: Request) {
     const created = await prisma.$transaction(async (tx) => {
       const e = await tx.dailyEntry.create({
         data: {
-          employeeId: user.uid,
+          employeeId,
           partnerId,
+          // Provenance: who typed it, when that isn't the owner.
+          enteredById: employeeId === user.uid ? null : user.uid,
           businessDate: toDate(meta.data.businessDate),
           shift: meta.data.shift,
           product: input.product,
@@ -130,7 +152,7 @@ export async function POST(req: Request) {
 
       // Submitting a shift implies the employee (and any partner) worked it.
       await syncAttendanceForEntry(tx, {
-        employeeId: user.uid,
+        employeeId,
         partnerId,
         date: toDate(meta.data.businessDate),
         shift: meta.data.shift,

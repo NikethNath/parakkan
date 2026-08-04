@@ -66,6 +66,7 @@ model User {
 
   entries          DailyEntry[]    @relation("EmployeeEntries")
   partnerEntries   DailyEntry[]    @relation("PartnerEntries")
+  enteredEntries   DailyEntry[]    @relation("EnteredEntries")
   verifiedEntries  DailyEntry[]    @relation("VerifiedBy")
   attendance       Attendance[]
   audits           EntryAudit[]
@@ -83,6 +84,10 @@ model DailyEntry {
   // the two for payroll (the stored shortExcess stays the full till difference).
   partner      User?    @relation("PartnerEntries", fields: [partnerId], references: [id])
   partnerId    Int?
+  // Who actually typed the sheet, when a colleague filed it for the owner
+  // (staff who aren't comfortable with a phone). Null = the owner filed it.
+  enteredBy    User?    @relation("EnteredEntries", fields: [enteredById], references: [id])
+  enteredById  Int?
   businessDate DateTime @db.Date
   shift        Shift
   product      Product

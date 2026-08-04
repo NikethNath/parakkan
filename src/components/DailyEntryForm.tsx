@@ -17,6 +17,9 @@ type FormState = {
   businessDate: string;
   shift: (typeof SHIFTS)[number];
   product: "" | (typeof PRODUCTS)[number]; // "" until the staff picks one (required)
+  // Admin-only, edit mode: which staff member this sheet belongs to. Changing
+  // it moves the sheet's short/excess and attendance to that person.
+  employeeId: string;
   partnerId: string; // "" = not answered yet; "NONE" = worked alone; else partner id
   rate: string;
   n1Open: string;
@@ -47,6 +50,7 @@ const emptyForm = (): FormState => {
   // No default product/partner — staff must actively choose (wrong-product and
   // forgotten-partner submissions were common when these were pre-filled).
   product: "",
+  employeeId: "",
   partnerId: "",
   rate: "",
   n1Open: "",
@@ -92,6 +96,7 @@ export default function DailyEntryForm({
   startLocked = false,
   deleteSlot,
   employees = [],
+  ownerId,
 }: {
   mode?: "create" | "edit";
   entryId?: number;
@@ -101,10 +106,14 @@ export default function DailyEntryForm({
   startLocked?: boolean;
   deleteSlot?: React.ReactNode;
   employees?: { id: number; name: string }[];
+  /** Whose sheet this is on a new sheet — chosen on the "Whose shift is this?"
+   *  step before this form is shown. */
+  ownerId?: number;
 } = {}) {
   const router = useRouter();
   const [form, setForm] = useState<FormState>(() => ({
     ...emptyForm(),
+    ...(ownerId ? { employeeId: String(ownerId) } : {}),
     ...(initial?.form ?? {}),
   }));
   const [oil, setOil] = useState<OilRow[]>(initial?.oil ?? []);
@@ -139,7 +148,11 @@ export default function DailyEntryForm({
     setForm((f) => ({ ...f, [k]: v }));
 
   function resetToInitial() {
-    setForm({ ...emptyForm(), ...(initial?.form ?? {}) });
+    setForm({
+      ...emptyForm(),
+      ...(ownerId ? { employeeId: String(ownerId) } : {}),
+      ...(initial?.form ?? {}),
+    });
     setOil(initial?.oil ?? []);
     setExpenses(initial?.expenses ?? []);
     setSalary(initial?.salary ?? []);
@@ -223,6 +236,9 @@ export default function DailyEntryForm({
         .map((l) => ({ customer: l.customer.trim(), amount: l.amount })),
       partnerId:
         form.partnerId && form.partnerId !== "NONE" ? Number(form.partnerId) : null,
+      // Whose sheet this is: chosen on a new sheet, and reassignable by an
+      // admin on an existing one (the server ignores it from an employee edit).
+      ...(form.employeeId ? { employeeId: Number(form.employeeId) } : {}),
     };
     try {
       const res = await fetch(
@@ -236,7 +252,16 @@ export default function DailyEntryForm({
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setConfirming(false); // close the dialog so the error below is visible
-        setError(data.error ?? "Could not save");
+        // Sessions end after 2 hours, so a slowly-filled sheet can outlive its
+        // login. Don't navigate away — the typed figures are still on screen and
+        // signing in on another tab makes this same button work.
+        setError(
+          res.status === 401
+            ? "You were signed out (sessions end after 2 hours). Stay on this page — " +
+                "open the app in a new tab, log in again, then press this button once more. " +
+                "Everything you typed is still here."
+            : (data.error ?? "Could not save"),
+        );
         if (Array.isArray(data.issues)) {
           setIssues(data.issues.map((i: { path: string; message: string }) => `${i.path}: ${i.message}`));
         }
@@ -352,6 +377,32 @@ export default function DailyEntryForm({
             />
           </Field>
         </div>
+        {admin && mode === "edit" && employees.length > 0 && (
+          <div className="mt-3">
+            <Field label="Submitted by — whose sheet this is">
+              <select
+                value={form.employeeId}
+                onChange={(e) => {
+                  set("employeeId", e.target.value);
+                  // The same person can't be both owner and partner.
+                  if (e.target.value && e.target.value === form.partnerId) set("partnerId", "NONE");
+                }}
+                className={inputCls}
+                required
+              >
+                {employees.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.name}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1 block text-xs text-faint">
+                Use this when a sheet was filed under the wrong name — the short/excess,
+                attendance and the staff member&apos;s own history all move across.
+              </span>
+            </Field>
+          </div>
+        )}
         {employees.length > 0 && (
           <div className="mt-3">
             <Field label="Partner — second person on this unit">
@@ -363,11 +414,13 @@ export default function DailyEntryForm({
               >
                 <option value="">— select —</option>
                 <option value="NONE">No partner — worked alone</option>
-                {employees.map((emp) => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.name}
-                  </option>
-                ))}
+                {employees
+                  .filter((emp) => String(emp.id) !== form.employeeId)
+                  .map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.name}
+                    </option>
+                  ))}
               </select>
               {form.partnerId && form.partnerId !== "NONE" && (
                 <span className="mt-1 block text-xs text-faint">
