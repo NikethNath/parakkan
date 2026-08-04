@@ -96,7 +96,6 @@ export default function DailyEntryForm({
   startLocked = false,
   deleteSlot,
   employees = [],
-  ownerId,
 }: {
   mode?: "create" | "edit";
   entryId?: number;
@@ -106,14 +105,10 @@ export default function DailyEntryForm({
   startLocked?: boolean;
   deleteSlot?: React.ReactNode;
   employees?: { id: number; name: string }[];
-  /** Whose sheet this is on a new sheet — chosen on the "Whose shift is this?"
-   *  step before this form is shown. */
-  ownerId?: number;
 } = {}) {
   const router = useRouter();
   const [form, setForm] = useState<FormState>(() => ({
     ...emptyForm(),
-    ...(ownerId ? { employeeId: String(ownerId) } : {}),
     ...(initial?.form ?? {}),
   }));
   const [oil, setOil] = useState<OilRow[]>(initial?.oil ?? []);
@@ -148,11 +143,7 @@ export default function DailyEntryForm({
     setForm((f) => ({ ...f, [k]: v }));
 
   function resetToInitial() {
-    setForm({
-      ...emptyForm(),
-      ...(ownerId ? { employeeId: String(ownerId) } : {}),
-      ...(initial?.form ?? {}),
-    });
+    setForm({ ...emptyForm(), ...(initial?.form ?? {}) });
     setOil(initial?.oil ?? []);
     setExpenses(initial?.expenses ?? []);
     setSalary(initial?.salary ?? []);
@@ -220,8 +211,12 @@ export default function DailyEntryForm({
     setSaving(true);
     setError(null);
     setIssues([]);
+    // employeeId is a select value ("" when this form doesn't set an owner), so
+    // it must never reach the API as a raw string — it's re-added as a number
+    // below only when a name is actually chosen.
+    const { employeeId: ownerChoice, ...formFields } = form;
     const payload = {
-      ...form,
+      ...formFields,
       oilLines: oil
         .filter((l) => l.name.trim() && n(l.amount) > 0)
         .map((l) => ({ name: l.name.trim(), amount: l.amount })),
@@ -238,7 +233,7 @@ export default function DailyEntryForm({
         form.partnerId && form.partnerId !== "NONE" ? Number(form.partnerId) : null,
       // Whose sheet this is: chosen on a new sheet, and reassignable by an
       // admin on an existing one (the server ignores it from an employee edit).
-      ...(form.employeeId ? { employeeId: Number(form.employeeId) } : {}),
+      ...(ownerChoice ? { employeeId: Number(ownerChoice) } : {}),
     };
     try {
       const res = await fetch(
