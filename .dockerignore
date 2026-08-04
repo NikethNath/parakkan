@@ -15,6 +15,7 @@ Daily_Sales_Report*
 178229004953986*
 
 # local/dev cruft
+docs
 npm-debug.log*
 coverage
 .vscode

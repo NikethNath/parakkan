@@ -43,6 +43,25 @@ jobs:
             upsert CRIS_SAP_CODE "$CRIS_SAP_CODE"
             upsert CRON_SECRET "$CRON_SECRET"
 
+            # Reclaim space BEFORE building. The post-build prune below never
+            # runs when a build fails, so once the disk fills up every deploy
+            # fails on "no space left on device" and can't recover on its own.
+            # Images/build cache only — never volumes (that's the database).
+            docker image prune -af --filter "until=24h" || true
+            docker builder prune -af --filter "until=24h" || true
+            # Still tight? Drop everything reclaimable, regardless of age —
+            # repeated failed deploys in one day leave <24h junk the filter
+            # above skips. Costs a slower rebuild, beats a failed deploy.
+            # Never --volumes: that would delete the database.
+            if [ "$(df --output=pcent / | tr -dc '0-9')" -ge 80 ]; then
+              echo "Disk above 80% — pruning all reclaimable Docker data."
+              docker image prune -af || true
+              docker builder prune -af || true
+            fi
+            df -h / | tail -1
+
             docker compose -f docker-compose.prod.yml up -d --build
             docker image prune -f
+            docker builder prune -f || true
+            df -h / | tail -1
             echo "Deployed at $(date)"

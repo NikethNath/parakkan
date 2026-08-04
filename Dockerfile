@@ -14,7 +14,9 @@ WORKDIR /app
 
 # Install ALL deps (dev deps are needed to build and to run prisma/tsx at start).
 COPY package.json package-lock.json* ./
-RUN npm ci
+# Clean the npm cache in the same layer — otherwise ~/.npm/_cacache (hundreds of
+# MB) is baked into the image and multiplied by every build kept on the server.
+RUN npm ci && npm cache clean --force
 
 # Build the app (package.json "build" runs `prisma generate && next build`).
 COPY . .
