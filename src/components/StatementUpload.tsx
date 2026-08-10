@@ -3,21 +3,31 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+interface FileResult {
+  fileName: string;
+  account: string | null;
+  found: number;
+  inserted: number;
+  duplicates: number;
+}
+
 export default function StatementUpload() {
   const router = useRouter();
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [msg, setMsg] = useState<string | null>(null);
+  const [detail, setDetail] = useState<FileResult[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function upload() {
-    if (!file) return;
+    if (files.length === 0) return;
     setBusy(true);
     setMsg(null);
+    setDetail([]);
     setErr(null);
     try {
       const fd = new FormData();
-      fd.append("file", file);
+      for (const f of files) fd.append("file", f);
       const res = await fetch("/api/statements", { method: "POST", body: fd });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -26,10 +36,11 @@ export default function StatementUpload() {
       }
       setMsg(
         `Imported ${d.inserted} new transaction${d.inserted === 1 ? "" : "s"} ` +
-          `(${d.gpay} GPay, ${d.pos} POS` +
+          `(${d.gpay} GPay, ${d.pos} POS/card` +
           (d.duplicates ? `, ${d.duplicates} already imported` : "") +
           `).`,
       );
+      setDetail(d.files ?? []);
       router.refresh();
     } catch {
       setErr("Network error");
@@ -44,25 +55,38 @@ export default function StatementUpload() {
         Upload bank statement
       </h2>
       <p className="mb-3 text-xs text-muted">
-        SBI statement export (.xls/.csv/.txt). GPay (PhonePe, T+1) and POS (DDMM)
-        credits are detected automatically; re-uploading is safe.
+        SBI statement exports (.xls/.csv/.txt). Pick <strong>both</strong> accounts
+        together — the main account (GPay) and the Paytm account (card) — since
+        card money is settled into Paytm now. Re-uploading is safe.
       </p>
       <div className="flex flex-wrap items-center gap-3">
         <input
           type="file"
+          multiple
           accept=".xls,.csv,.txt,text/plain"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
           className="text-sm"
         />
         <button
           onClick={upload}
-          disabled={!file || busy}
+          disabled={files.length === 0 || busy}
           className="rounded-lg bg-accent px-4 py-1.5 font-medium text-white hover:bg-accent-strong disabled:opacity-60"
         >
-          {busy ? "Uploading…" : "Upload"}
+          {busy ? "Uploading…" : files.length > 1 ? `Upload ${files.length} files` : "Upload"}
         </button>
       </div>
       {msg && <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-300">{msg}</p>}
+      {detail.length > 1 && (
+        <ul className="mt-1 space-y-0.5 text-xs text-muted">
+          {detail.map((f) => (
+            <li key={f.fileName}>
+              {f.account ? `A/c …${f.account.slice(-4)}` : f.fileName}: {f.inserted} new
+              {f.duplicates ? `, ${f.duplicates} already imported` : ""}
+              {f.found === 0 ? " — nothing recognised in this file" : ""}
+            </li>
+          ))}
+        </ul>
+      )}
       {err && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{err}</p>}
     </section>
   );

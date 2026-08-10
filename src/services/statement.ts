@@ -1,9 +1,14 @@
 /**
- * Parser for the dealer's SBI corporate statement (tab-separated text with a
+ * Parser for the dealer's SBI corporate statements (tab-separated text with a
  * `.xls` name). See docs/statement-format.md for the full spec.
  *
- * Extracts GPay (PhonePe, T+1) and POS (BULK POSTING, DDMM tail) credits and
- * maps each to the business date it was collected.
+ * Card money has moved accounts, so a full month now needs *two* statements:
+ *   - the main current account  — GPay (PhonePe, T+1) and, until 19 Jul 2026,
+ *     card settlements as SBI BULK POSTING rows carrying a DDMM tail;
+ *   - the Paytm settlement account — card settlements since Aug 2026, one
+ *     NEFT credit a day, no DDMM tail.
+ * Both are parsed by this one function; each credit is mapped to the business
+ * date it was actually collected on.
  */
 
 export type Channel = "GPAY" | "POS" | "OTHER";
@@ -25,9 +30,21 @@ export interface ParsedStatement {
 const pad = (n: number) => String(n).padStart(2, "0");
 const ymd = (y: number, m: number, d: number) => `${y}-${pad(m)}-${pad(d)}`;
 
-function parseDMY(s: string): { y: number; m: number; d: number } | null {
-  const m = s.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  return m ? { d: +m[1], m: +m[2], y: +m[3] } : null;
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+/** SBI dates the two accounts differently: the main current account exports
+ *  `07/08/2026`, the Paytm settlement account `7 Aug 2026`. Accept both. */
+function parseTxnDate(s: string): { y: number; m: number; d: number } | null {
+  const t = s.trim();
+  const num = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (num) return { d: +num[1], m: +num[2], y: +num[3] };
+
+  const named = t.match(/^(\d{1,2})\s+([A-Za-z]{3})[A-Za-z]*\s+(\d{4})$/);
+  if (named) {
+    const mo = MONTHS.indexOf(named[2].toLowerCase()) + 1;
+    if (mo > 0) return { d: +named[1], m: mo, y: +named[3] };
+  }
+  return null;
 }
 
 function shift(y: number, mo: number, d: number, deltaDays: number) {
@@ -35,10 +52,14 @@ function shift(y: number, mo: number, d: number, deltaDays: number) {
   return { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, d: dt.getUTCDate() };
 }
 
+const isPaytm = (lower: string) => lower.includes("paytm");
+
 export function classify(narration: string): Channel {
   const t = narration.toLowerCase();
   if (t.includes("phonepe limited")) return "GPAY";
   if (t.includes("bulk posting") && t.includes("sbip_cr_parakkan")) return "POS";
+  // Card money since Aug 2026: Paytm settles the machine into its own account.
+  if (isPaytm(t)) return "POS";
   return "OTHER";
 }
 
@@ -67,7 +88,7 @@ export function parseStatement(text: string): ParsedStatement {
     const cols = lines[i].split("\t");
     if (cols.length < 8) continue;
 
-    const txn = parseDMY(cols[0]);
+    const txn = parseTxnDate(cols[0]);
     if (!txn) continue;
 
     const narration = (cols[2] ?? "").trim();
@@ -80,21 +101,25 @@ export function parseStatement(text: string): ParsedStatement {
       continue;
     }
 
+    // Only SBI's own BULK POSTING rows date themselves, via a DDMM tail. Paytm
+    // is excluded explicitly so a narration that happens to end in digits can
+    // never be read as a business date.
+    const tagged =
+      channel === "POS" && !isPaytm(narration.toLowerCase())
+        ? narration.match(/(\d{2})(\d{2})--\s*$/)
+        : null;
+
     let b: { y: number; m: number; d: number };
-    if (channel === "GPAY") {
-      b = shift(txn.y, txn.m, txn.d, -1); // T+1 settlement
+    if (tagged) {
+      const bd = +tagged[1];
+      const bmo = +tagged[2];
+      let year = txn.y;
+      if (Date.UTC(year, bmo - 1, bd) > Date.UTC(txn.y, txn.m - 1, txn.d)) year -= 1; // Dec→Jan rollover
+      b = { y: year, m: bmo, d: bd };
     } else {
-      const mm = narration.match(/(\d{2})(\d{2})--\s*$/);
-      if (mm) {
-        let year = txn.y;
-        const bd = +mm[1];
-        const bmo = +mm[2];
-        const cand = Date.UTC(year, bmo - 1, bd);
-        if (cand > Date.UTC(txn.y, txn.m - 1, txn.d)) year -= 1; // Dec→Jan rollover
-        b = { y: year, m: bmo, d: bd };
-      } else {
-        b = { y: txn.y, m: txn.m, d: txn.d };
-      }
+      // T+1: PhonePe and Paytm each send one lump the morning after the day
+      // they collected, with nothing in the narration to date it.
+      b = shift(txn.y, txn.m, txn.d, -1);
     }
 
     txns.push({

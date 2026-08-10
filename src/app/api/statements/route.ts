@@ -15,22 +15,32 @@ export async function POST(req: Request) {
   }
 
   const formData = await req.formData().catch(() => null);
-  const file = formData?.get("file");
-  if (!(file instanceof File)) {
+  // A full month now spans two accounts (main + Paytm), so several statements
+  // can be sent in one go.
+  const files = (formData?.getAll("file") ?? []).filter((f): f is File => f instanceof File);
+  if (files.length === 0) {
     return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
   }
 
-  const text = await file.text();
-  const parsed = parseStatement(text);
-  if (parsed.txns.length === 0) {
+  const statements = await Promise.all(
+    files.map(async (file) => ({ file, parsed: parseStatement(await file.text()) })),
+  );
+  const allTxns = statements.flatMap((s) => s.parsed.txns);
+  if (allTxns.length === 0) {
     return NextResponse.json(
-      { error: "No GPay/POS credits found — is this the right statement file?" },
+      {
+        error:
+          files.length === 1
+            ? "No GPay/POS credits found — is this the right statement file?"
+            : "No GPay/POS credits found in any of these files.",
+      },
       { status: 400 },
     );
   }
 
-  // De-duplicate against rows already imported (handles re-uploading a statement).
-  const dates = [...new Set(parsed.txns.map((t) => t.businessDate))].map(toDate);
+  // De-duplicate against rows already imported (handles re-uploading a
+  // statement, or two files whose date ranges overlap).
+  const dates = [...new Set(allTxns.map((t) => t.businessDate))].map(toDate);
   const existing = await prisma.bankTxn.findMany({
     where: { businessDate: { in: dates } },
     select: { txnDate: true, channel: true, amount: true, narration: true },
@@ -38,33 +48,65 @@ export async function POST(req: Request) {
   const seen = new Set(
     existing.map((e) => key(isoDate(e.txnDate), e.channel, toNum(e.amount), e.narration)),
   );
-  const fresh = parsed.txns.filter(
-    (t) => !seen.has(key(t.txnDate, t.channel, t.amount, t.narration)),
-  );
 
-  const upload = await prisma.bankUpload.create({
-    data: { uploadedById: user.uid, fileName: file.name },
-  });
-  if (fresh.length > 0) {
-    await prisma.bankTxn.createMany({
-      data: fresh.map((t) => ({
-        uploadId: upload.id,
-        txnDate: toDate(t.txnDate),
-        businessDate: toDate(t.businessDate),
-        amount: t.amount,
-        channel: t.channel,
-        narration: t.narration,
-      })),
+  interface FileResult {
+    uploadId: number;
+    fileName: string;
+    account: string | null;
+    found: number;
+    inserted: number;
+    duplicates: number;
+    gpay: number;
+    pos: number;
+  }
+  const results: FileResult[] = [];
+  for (const { file, parsed } of statements) {
+    const fresh = parsed.txns.filter((t) => {
+      const k = key(t.txnDate, t.channel, t.amount, t.narration);
+      if (seen.has(k)) return false;
+      seen.add(k); // also guards against the same file being sent twice
+      return true;
+    });
+
+    const upload = await prisma.bankUpload.create({
+      data: { uploadedById: user.uid, fileName: file.name },
+    });
+    if (fresh.length > 0) {
+      await prisma.bankTxn.createMany({
+        data: fresh.map((t) => ({
+          uploadId: upload.id,
+          txnDate: toDate(t.txnDate),
+          businessDate: toDate(t.businessDate),
+          amount: t.amount,
+          channel: t.channel,
+          narration: t.narration,
+        })),
+      });
+    }
+
+    results.push({
+      uploadId: upload.id,
+      fileName: file.name,
+      account: parsed.accountNumber ?? null,
+      found: parsed.txns.length,
+      inserted: fresh.length,
+      duplicates: parsed.txns.length - fresh.length,
+      gpay: fresh.filter((t) => t.channel === "GPAY").length,
+      pos: fresh.filter((t) => t.channel === "POS").length,
     });
   }
 
+  const total = (k: "found" | "inserted" | "duplicates" | "gpay" | "pos") =>
+    results.reduce((s, r) => s + r[k], 0);
+
   return NextResponse.json({
     ok: true,
-    uploadId: upload.id,
-    found: parsed.txns.length,
-    inserted: fresh.length,
-    duplicates: parsed.txns.length - fresh.length,
-    gpay: parsed.txns.filter((t) => t.channel === "GPAY").length,
-    pos: parsed.txns.filter((t) => t.channel === "POS").length,
+    files: results,
+    uploadId: results[results.length - 1].uploadId,
+    found: total("found"),
+    inserted: total("inserted"),
+    duplicates: total("duplicates"),
+    gpay: total("gpay"),
+    pos: total("pos"),
   });
 }
