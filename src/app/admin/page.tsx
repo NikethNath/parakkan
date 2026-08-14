@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { inr, toNum, istDateTimeShort, istToday, dayBoundsUTC, dayLabel } from "@/lib/format";
+import { inr, toNum, istDateTimeShort, istToday, isoDate, dayBoundsUTC, dayLabel } from "@/lib/format";
 import { shortExcessLabel } from "@/lib/calc";
 import AutoSubmitDate from "@/components/AutoSubmitDate";
 
@@ -21,6 +21,24 @@ export default async function SubmissionsPage({
   const toRaw = isDate(sp.to) ? sp.to! : "";
   const lo = !hasRange ? "" : fromRaw <= toRaw ? fromRaw : toRaw;
   const hi = !hasRange ? "" : fromRaw <= toRaw ? toRaw : fromRaw;
+
+  // A sheet dated in the future can't be reached by a filter that stops at
+  // today, so the pickers stretch to cover whatever actually exists. Once the
+  // stray sheet is re-dated this falls back to today on its own.
+  const furthest = await prisma.dailyEntry.findFirst({
+    orderBy: { businessDate: "desc" },
+    select: { businessDate: true },
+  });
+  const latestSheet = furthest ? isoDate(furthest.businessDate) : today;
+  const maxDate = latestSheet > today ? latestSheet : today;
+
+  const future = maxDate > today
+    ? await prisma.dailyEntry.findMany({
+        where: { businessDate: { gt: dayBoundsUTC(today).start } },
+        orderBy: { businessDate: "asc" },
+        include: { employee: { select: { name: true } } },
+      })
+    : [];
 
   // Global "needs verification" alert — independent of the date range.
   const unverified = await prisma.dailyEntry.findMany({
@@ -57,6 +75,35 @@ export default async function SubmissionsPage({
 
   return (
     <>
+      {future.length > 0 && (
+        <section className="rounded-xl border border-red-300 bg-red-50 p-4 shadow-soft dark:border-red-500/30 dark:bg-red-500/10">
+          <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-red-800 dark:text-red-300">
+            <span aria-hidden>⚠</span>
+            {future.length} sheet{future.length === 1 ? " is" : "s are"} dated in the future
+          </h2>
+          <p className="mb-2 text-xs text-red-700 dark:text-red-300/80">
+            Almost always a typo in the date field. Open it and set the date to the day
+            it was actually collected — attendance and short/excess follow the change.
+          </p>
+          <ul className="divide-y divide-red-200/70 dark:divide-red-500/20">
+            {future.map((e) => (
+              <li key={e.id}>
+                <Link
+                  href={`/admin/entries/${e.id}`}
+                  className="flex items-center justify-between gap-3 py-2 text-sm transition hover:opacity-75"
+                >
+                  <span className="text-foreground">
+                    <span className="font-medium">{dayLabel(isoDate(e.businessDate))}</span> ·{" "}
+                    {e.employee.name} · {e.shift.toLowerCase()} · {e.product}
+                  </span>
+                  <span className="font-medium text-red-700 dark:text-red-300">Fix date →</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {unverified.length > 0 && (
         <section className="rounded-xl border border-amber-300 bg-amber-50 p-4 shadow-soft dark:border-amber-500/30 dark:bg-amber-500/10">
           <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-300">
@@ -114,7 +161,7 @@ export default async function SubmissionsPage({
             type="date"
             name="from"
             defaultValue={fromRaw}
-            max={today}
+            max={maxDate}
             className="rounded-lg border border-border px-3 py-1.5"
           />
         </label>
@@ -124,7 +171,7 @@ export default async function SubmissionsPage({
             type="date"
             name="to"
             defaultValue={toRaw}
-            max={today}
+            max={maxDate}
             className="rounded-lg border border-border px-3 py-1.5"
           />
         </label>
