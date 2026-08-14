@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 import { entryInputSchema, computeEntry, SHIFTS } from "@/lib/calc";
+import { FUTURE_DATE_ERROR, isFutureBusinessDate } from "@/lib/businessDate";
 import { toNum, isoDate } from "@/lib/format";
 import { syncAttendanceForEntry, syncAttendanceForUpdate } from "@/lib/attendance";
 
@@ -138,6 +139,13 @@ export async function PATCH(
   // another day — the date is the one change with cross-month payroll impact, so
   // it's pinned to whatever it already was. Admins can still re-date a sheet.
   const businessDate = isAdmin ? meta.data.businessDate : isoDate(existing.businessDate);
+
+  // A sheet may never be *moved* to a future day. A sheet that is already
+  // mis-dated ahead of today stays editable, so its figures aren't frozen and
+  // an admin can always drag the date back where it belongs.
+  if (isFutureBusinessDate(businessDate) && businessDate !== isoDate(existing.businessDate)) {
+    return NextResponse.json({ error: FUTURE_DATE_ERROR }, { status: 400 });
+  }
 
   // Who the sheet belongs to. Only an admin can move it to another person;
   // everything keyed off the owner (short/excess, attendance, their history)

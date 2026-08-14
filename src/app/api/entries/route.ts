@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 import { entryInputSchema, computeEntry, SHIFTS } from "@/lib/calc";
+import { FUTURE_DATE_ERROR, isFutureBusinessDate } from "@/lib/businessDate";
 import { syncAttendanceForEntry } from "@/lib/attendance";
 
 const metaSchema = z.object({
@@ -36,6 +37,10 @@ export async function POST(req: Request) {
       ...(entry.success ? [] : entry.error.issues),
     ].map((i) => ({ path: i.path.join("."), message: i.message }));
     return NextResponse.json({ error: "Validation failed", issues }, { status: 400 });
+  }
+
+  if (isFutureBusinessDate(meta.data.businessDate)) {
+    return NextResponse.json({ error: FUTURE_DATE_ERROR }, { status: 400 });
   }
 
   const input = entry.data;

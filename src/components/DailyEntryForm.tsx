@@ -325,6 +325,9 @@ export default function DailyEntryForm({
               type="date"
               value={form.businessDate}
               onChange={(e) => set("businessDate", e.target.value)}
+              // The server rejects a future date too — this only keeps the
+              // picker from offering one in the first place.
+              max={istToday()}
               className={inputCls + (lockDate ? " bg-surface-2 text-muted" : "")}
               required
               disabled={lockDate}
