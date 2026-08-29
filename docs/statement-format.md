@@ -9,8 +9,14 @@ Card money moved off SBI's own POS in Aug 2026, so a complete month now needs
 
 | Account | Holds | Date format in rows |
 | --- | --- | --- |
-| main current a/c (`…4074`) | GPay (PhonePe) daily; card as `BULK POSTING` **until 19 Jul 2026** | `07/08/2026` |
-| Paytm settlement a/c (`…0613`) | card settlements **from Aug 2026** | `7 Aug 2026` |
+| main current a/c (`…4074`) | GPay (PhonePe) daily **until 26 Aug 2026**; card as `BULK POSTING` **until 19 Jul 2026** | `07/08/2026` |
+| Paytm settlement a/c (`…0613`) | card **from Aug 2026**; card **and UPI combined from 25 Aug 2026** | `7 Aug 2026` |
+
+> **The upload is currently hidden in the app.** Since 25 Aug 2026 a statement
+> can no longer supply either figure (see below), so GPay/POS are typed in per
+> day from the Paytm Business app on the reconcile page. `StatementUpload` and
+> `/api/statements` still work and can be re-enabled from
+> `src/app/admin/reconcile/page.tsx` if an older month ever needs importing.
 
 The two exports are formatted slightly differently — same tab-separated shape
 and same column order, but the Paytm account writes dates as `7 Aug 2026` and
@@ -35,7 +41,25 @@ Only **Credit** rows are collections. Match on the Description text:
 - **T+1 settlement:** money collected on day *D* is credited on *D+1* morning.
   → `businessDate = creditTxnDate − 1 day`. (Confirmed: 12 Jun collection ₹1,82,420.04 posts 13 Jun.)
 
-### POS / card swipe, Paytm (Aug 2026 →)  → channel `POS`
+### Combined UPI + card, Paytm (25 Aug 2026 →)  → **not attributable**
+- One credit covers UPI *and* card with no split anywhere in the row, so it is
+  **skipped** — counted in `skippedCombined` — rather than guessed at. The day's
+  GPay/POS figures are typed in by hand from the Paytm Business app and stored
+  as `BankTxn` rows with `enteredById` set.
+- The cut-off is the constant `PAYTM_COMBINED_FROM` in `src/services/statement.ts`.
+  It has to be a **date**, not a narration test: the two eras differ only in NEFT
+  vs RTGS (`BY TRANSFER-RTGS UTR NO: YESBR1…--PAYTM PAYMENTS SERVICES`), which
+  merely reflects the ₹2L RTGS threshold, not what the money was.
+- Evidence for 25 Aug 2026 as the boundary: PhonePe's last credit (26 Aug,
+  ₹71,082.92) is a part-day covering 25 Aug, and Paytm's first large credit
+  (26 Aug, ₹3,59,124.78) covers the same day.
+- **Settlement is no longer one-per-day** — nothing arrived on 27 Aug 2026. Days
+  are reconciled from the typed figures, so a gap in the bank is not a shortfall.
+- That account now also carries unrelated traffic (a personal UPI credit, and
+  outgoing reimbursements/bill payments). Non-Paytm credits fall to `OTHER` and
+  debits are ignored, as before.
+
+### POS / card swipe, Paytm (Aug 2026 → 24 Aug 2026)  → channel `POS`
 - Description contains **`PAYTM`** (full pattern:
   `BY TRANSFER-NEFT*UTIB0000022*AXNPM…*PAYTM PAYMENTS S--`), Branch Code `4430`,
   in the `…0613` account. Both UTIB and YESB routing appear.

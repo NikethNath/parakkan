@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { toNum, isoDate, dayBoundsUTC } from "@/lib/format";
+import { bankFigureSelect, preferTyped } from "@/lib/bankFigures";
 
 /**
  * The per-day summary the accountant works from, shared by the on-screen table
@@ -75,9 +76,9 @@ export const SUMMARY_COLS: SummaryCol[] = [
   { label: "Salary", kind: "money", value: (r) => r.salary },
   { label: "Oil", kind: "money", value: (r) => r.oil },
   { label: "Cash", kind: "money", value: (r) => r.cash },
-  { label: "GPay (stmt)", kind: "money", value: (r) => r.gpayStmt },
+  { label: "GPay (received)", kind: "money", value: (r) => r.gpayStmt },
   { label: "GPay (staff)", kind: "money", value: (r) => r.gpayStaff },
-  { label: "POS (stmt)", kind: "money", value: (r) => r.posStmt },
+  { label: "POS (received)", kind: "money", value: (r) => r.posStmt },
   { label: "POS (staff)", kind: "money", value: (r) => r.posStaff },
 ];
 
@@ -114,7 +115,7 @@ export async function buildSummary(from: string, to: string): Promise<Summary> {
     }),
     prisma.bankTxn.findMany({
       where: { businessDate: { gte: start, lt: endExclusive } },
-      select: { businessDate: true, channel: true, amount: true },
+      select: bankFigureSelect,
     }),
   ]);
 
@@ -151,11 +152,14 @@ export async function buildSummary(from: string, to: string): Promise<Summary> {
     r.gpayStaff += toNum(e.gpay);
     r.posStaff += toNum(e.pos);
   }
-  for (const t of txns) {
-    const r = dayOf(t.businessDate);
-    const amt = toNum(t.amount);
-    if (t.channel === "GPAY") r.gpayStmt += amt;
-    else if (t.channel === "POS") r.posStmt += amt;
+  // A figure typed in from the Paytm app supersedes the parsed rows for that
+  // day and channel — the same rule the reconcile table uses, so this report
+  // and that screen can never disagree.
+  for (const [k, figure] of preferTyped(txns)) {
+    const [date, channel] = k.split("|");
+    const r = dayOf(new Date(`${date}T00:00:00.000Z`));
+    if (channel === "GPAY") r.gpayStmt += figure.amount;
+    else if (channel === "POS") r.posStmt += figure.amount;
   }
 
   const days = [...map.entries()]

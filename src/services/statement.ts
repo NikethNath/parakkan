@@ -5,10 +5,11 @@
  * Card money has moved accounts, so a full month now needs *two* statements:
  *   - the main current account  — GPay (PhonePe, T+1) and, until 19 Jul 2026,
  *     card settlements as SBI BULK POSTING rows carrying a DDMM tail;
- *   - the Paytm settlement account — card settlements since Aug 2026, one
- *     NEFT credit a day, no DDMM tail.
+ *   - the Paytm settlement account — card settlements from Aug 2026, and from
+ *     25 Aug 2026 card *and* UPI together in one credit.
  * Both are parsed by this one function; each credit is mapped to the business
- * date it was actually collected on.
+ * date it was actually collected on. A credit that cannot be attributed to a
+ * single channel is skipped rather than guessed at — see PAYTM_COMBINED_FROM.
  */
 
 export type Channel = "GPAY" | "POS" | "OTHER";
@@ -25,6 +26,9 @@ export interface ParsedStatement {
   accountNumber?: string;
   txns: ParsedTxn[];
   skippedOther: number;
+  /** Of those, the combined Paytm settlements — days whose GPay/POS split has
+   *  to be typed in by hand. Reported so the upload can say so. */
+  skippedCombined: number;
 }
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -54,12 +58,27 @@ function shift(y: number, mo: number, d: number, deltaDays: number) {
 
 const isPaytm = (lower: string) => lower.includes("paytm");
 
-export function classify(narration: string): Channel {
+/**
+ * The first business date on which Paytm settled UPI *and* card in a single
+ * credit. Before it, a Paytm credit was the card machine alone and is real POS
+ * money; from it, one credit covers both with nothing in the row to split them.
+ *
+ * The rule has to be dated rather than read off the narration: the two eras
+ * differ only in NEFT vs RTGS, which just reflects the ₹2L RTGS threshold, not
+ * what the money was. Determined from the statements — PhonePe's last (partial)
+ * credit covers 25 Aug and Paytm's first large credit covers the same day.
+ */
+export const PAYTM_COMBINED_FROM = "2026-08-25";
+
+export function classify(narration: string, businessDate?: string): Channel {
   const t = narration.toLowerCase();
   if (t.includes("phonepe limited")) return "GPAY";
   if (t.includes("bulk posting") && t.includes("sbip_cr_parakkan")) return "POS";
-  // Card money since Aug 2026: Paytm settles the machine into its own account.
-  if (isPaytm(t)) return "POS";
+  if (isPaytm(t)) {
+    // Combined settlements aren't attributable to a channel, so they're left
+    // out entirely; the day's GPay/POS split is typed in from the Paytm app.
+    return businessDate && businessDate >= PAYTM_COMBINED_FROM ? "OTHER" : "POS";
+  }
   return "OTHER";
 }
 
@@ -82,7 +101,8 @@ export function parseStatement(text: string): ParsedStatement {
 
   const txns: ParsedTxn[] = [];
   let skippedOther = 0;
-  if (headerIdx === -1) return { accountNumber, txns, skippedOther };
+  let skippedCombined = 0;
+  if (headerIdx === -1) return { accountNumber, txns, skippedOther, skippedCombined };
 
   for (let i = headerIdx + 1; i < lines.length; i++) {
     const cols = lines[i].split("\t");
@@ -95,19 +115,12 @@ export function parseStatement(text: string): ParsedStatement {
     const amount = parseFloat((cols[6] ?? "").replace(/,/g, "").trim());
     if (!Number.isFinite(amount) || amount <= 0) continue; // credits only
 
-    const channel = classify(narration);
-    if (channel === "OTHER") {
-      skippedOther++;
-      continue;
-    }
-
     // Only SBI's own BULK POSTING rows date themselves, via a DDMM tail. Paytm
     // is excluded explicitly so a narration that happens to end in digits can
     // never be read as a business date.
-    const tagged =
-      channel === "POS" && !isPaytm(narration.toLowerCase())
-        ? narration.match(/(\d{2})(\d{2})--\s*$/)
-        : null;
+    const tagged = isPaytm(narration.toLowerCase())
+      ? null
+      : narration.match(/(\d{2})(\d{2})--\s*$/);
 
     let b: { y: number; m: number; d: number };
     if (tagged) {
@@ -122,14 +135,24 @@ export function parseStatement(text: string): ParsedStatement {
       b = shift(txn.y, txn.m, txn.d, -1);
     }
 
+    // Classified only once the business date is known — whether a Paytm credit
+    // is card-only or a combined settlement depends on which day it covers.
+    const businessDate = ymd(b.y, b.m, b.d);
+    const channel = classify(narration, businessDate);
+    if (channel === "OTHER") {
+      skippedOther++;
+      if (isPaytm(narration.toLowerCase())) skippedCombined++;
+      continue;
+    }
+
     txns.push({
       txnDate: ymd(txn.y, txn.m, txn.d),
-      businessDate: ymd(b.y, b.m, b.d),
+      businessDate,
       amount: Math.round(amount * 100) / 100,
       channel,
       narration,
     });
   }
 
-  return { accountNumber, txns, skippedOther };
+  return { accountNumber, txns, skippedOther, skippedCombined };
 }

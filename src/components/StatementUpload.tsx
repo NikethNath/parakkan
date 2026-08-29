@@ -9,12 +9,14 @@ interface FileResult {
   found: number;
   inserted: number;
   duplicates: number;
+  needsSplit: number;
 }
 
 export default function StatementUpload() {
   const router = useRouter();
   const [files, setFiles] = useState<File[]>([]);
   const [msg, setMsg] = useState<string | null>(null);
+  const [needsSplit, setNeedsSplit] = useState(0);
   const [detail, setDetail] = useState<FileResult[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -23,6 +25,7 @@ export default function StatementUpload() {
     if (files.length === 0) return;
     setBusy(true);
     setMsg(null);
+    setNeedsSplit(0);
     setDetail([]);
     setErr(null);
     try {
@@ -40,6 +43,7 @@ export default function StatementUpload() {
           (d.duplicates ? `, ${d.duplicates} already imported` : "") +
           `).`,
       );
+      setNeedsSplit(d.needsSplit ?? 0);
       setDetail(d.files ?? []);
       router.refresh();
     } catch {
@@ -76,13 +80,21 @@ export default function StatementUpload() {
         </button>
       </div>
       {msg && <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-300">{msg}</p>}
+      {needsSplit > 0 && (
+        <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
+          {needsSplit} Paytm settlement{needsSplit === 1 ? "" : "s"} could not be split —
+          Paytm pays UPI and card in as one credit. Enter the GPay/POS figures for those
+          days from the Paytm Business app using the table below.
+        </p>
+      )}
       {detail.length > 1 && (
         <ul className="mt-1 space-y-0.5 text-xs text-muted">
           {detail.map((f) => (
             <li key={f.fileName}>
               {f.account ? `A/c …${f.account.slice(-4)}` : f.fileName}: {f.inserted} new
               {f.duplicates ? `, ${f.duplicates} already imported` : ""}
-              {f.found === 0 ? " — nothing recognised in this file" : ""}
+              {f.needsSplit > 0 ? `, ${f.needsSplit} needing a split` : ""}
+              {f.found === 0 && f.needsSplit === 0 ? " — nothing recognised in this file" : ""}
             </li>
           ))}
         </ul>

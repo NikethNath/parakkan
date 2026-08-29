@@ -2,14 +2,29 @@
 
 import { useState } from "react";
 import { inr } from "@/lib/format";
+import ReconcileDayEditButton from "@/components/ReconcileDayEditButton";
 
-type Row = { date: string; bank: number; entered: number };
+export type Side = {
+  /** Null when nothing has been parsed or typed for this day yet. */
+  bank: number | null;
+  /** True when the figure was typed in from the Paytm app. */
+  typed: boolean;
+  entered: number;
+};
+export type Day = { date: string; gpay: Side; pos: Side };
+
 const TOL = 6; // ₹ — only flag GPay/POS days off by more than this
 
-export default function BankReconcile({ gpay, pos }: { gpay: Row[]; pos: Row[] }) {
-  const [channel, setChannel] = useState<"GPAY" | "POS">("GPAY");
-  const rows = channel === "GPAY" ? gpay : pos;
-  const hasAny = rows.some((r) => r.bank !== 0 || r.entered !== 0);
+export default function BankReconcile({ days }: { days: Day[] }) {
+  const [channel, setChannel] = useState<"gpay" | "pos">("gpay");
+  const hasAny = days.some((d) => d[channel].bank !== null || d[channel].entered !== 0);
+
+  const label = (date: string) =>
+    new Date(`${date}T00:00:00Z`).toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      timeZone: "UTC",
+    });
 
   return (
     <div>
@@ -17,11 +32,11 @@ export default function BankReconcile({ gpay, pos }: { gpay: Row[]; pos: Row[] }
         <span className="font-medium text-foreground">Channel</span>
         <select
           value={channel}
-          onChange={(e) => setChannel(e.target.value as "GPAY" | "POS")}
+          onChange={(e) => setChannel(e.target.value as "gpay" | "pos")}
           className="rounded-lg border border-border px-3 py-1.5"
         >
-          <option value="GPAY">GPay / UPI</option>
-          <option value="POS">POS / card</option>
+          <option value="gpay">GPay / UPI</option>
+          <option value="pos">POS / card</option>
         </select>
       </label>
 
@@ -33,33 +48,62 @@ export default function BankReconcile({ gpay, pos }: { gpay: Row[]; pos: Row[] }
             <thead className="text-left text-muted">
               <tr>
                 <th className="px-3 py-1.5 font-medium">Date</th>
-                <th className="px-3 py-1.5 text-right font-medium">Bank</th>
+                <th className="px-3 py-1.5 text-right font-medium">Received</th>
                 <th className="px-3 py-1.5 text-right font-medium">Entered by staff</th>
                 <th className="px-3 py-1.5 text-right font-medium">Δ</th>
+                <th className="px-3 py-1.5 text-right font-medium print:hidden"></th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => {
-                const d = Math.round((r.entered - r.bank) * 100) / 100;
-                const off = Math.abs(d) > TOL;
+              {days.map((day) => {
+                const side = day[channel];
+                // Nothing recorded yet is not a shortfall — every day since the
+                // Paytm switch is blank until the split is typed in.
+                const pending = side.bank === null;
+                const d = pending ? 0 : Math.round((side.entered - side.bank!) * 100) / 100;
+                const off = !pending && Math.abs(d) > TOL;
                 return (
-                  <tr key={r.date} className={"border-t border-border " + (off ? "bg-red-50 dark:bg-red-500/10" : "")}>
-                    <td className="px-3 py-1.5">
-                      {new Date(`${r.date}T00:00:00Z`).toLocaleDateString("en-IN", {
-                        day: "2-digit",
-                        month: "short",
-                        timeZone: "UTC",
-                      })}
+                  <tr
+                    key={day.date}
+                    className={"border-t border-border " + (off ? "bg-red-50 dark:bg-red-500/10" : "")}
+                  >
+                    <td className="px-3 py-1.5">{label(day.date)}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-muted">
+                      {pending ? (
+                        <span className="text-faint">—</span>
+                      ) : (
+                        <>
+                          {inr(side.bank!)}
+                          {side.typed && (
+                            <span
+                              className="ml-1 text-xs text-faint"
+                              title="Typed in from the Paytm app"
+                            >
+                              ✎
+                            </span>
+                          )}
+                        </>
+                      )}
                     </td>
-                    <td className="px-3 py-1.5 text-right tabular-nums text-muted">{inr(r.bank)}</td>
-                    <td className="px-3 py-1.5 text-right tabular-nums text-muted">{inr(r.entered)}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-muted">
+                      {inr(side.entered)}
+                    </td>
                     <td
                       className={
                         "px-3 py-1.5 text-right font-medium tabular-nums " +
                         (off ? "text-red-600 dark:text-red-400" : "text-faint")
                       }
                     >
-                      {off ? `${d > 0 ? "+" : "−"}${inr(Math.abs(d))}` : "✓"}
+                      {pending ? "—" : off ? `${d > 0 ? "+" : "−"}${inr(Math.abs(d))}` : "✓"}
+                    </td>
+                    <td className="px-3 py-1.5 text-right print:hidden">
+                      <ReconcileDayEditButton
+                        date={day.date}
+                        label={label(day.date)}
+                        gpay={day.gpay.typed ? day.gpay.bank : null}
+                        pos={day.pos.typed ? day.pos.bank : null}
+                        entered={{ gpay: day.gpay.entered, pos: day.pos.entered }}
+                      />
                     </td>
                   </tr>
                 );

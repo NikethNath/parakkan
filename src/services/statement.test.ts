@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseStatement, classify } from "./statement";
+import { parseStatement, classify, PAYTM_COMBINED_FROM } from "./statement";
 
 // Every account number, merchant/terminal id and NEFT reference below is
 // fabricated — the layout is what these fixtures test, and this repo is public.
@@ -49,6 +49,23 @@ const paytmSample = [
   "**This is a computer generated statement and does not require a signature",
 ].join("\n");
 
+// From 25 Aug 2026 Paytm settles UPI and card together, so a credit says
+// nothing about the split. Those days are typed in by hand instead.
+const combinedSample = [
+  `Account Number     :${T}_00000022222222222`,
+  ["Txn Date", "Value Date", "Description", "Ref No./Cheque No.", "Branch Code", "        Debit", "Credit", "Balance", ""].join(T),
+  // 25 Aug business date — the first combined day, and an RTGS narration.
+  row("26 Aug 2026", "   BY TRANSFER-RTGS UTR NO: YESBR10000000000000000--PAYTM PAYMENTS SERVICES", " / ", "4430", " ", "3,59,124.78"),
+  // 27 Aug business date — note nothing settles on 27 Aug itself.
+  row("28 Aug 2026", "   BY TRANSFER-RTGS UTR NO: YESBR10000000000000001--PAYTM PAYMENTS SERVICES", " / ", "4430", " ", "2,98,089.27"),
+  // Card-only era, still real POS money: 24 Aug business date.
+  row("25 Aug 2026", "   BY TRANSFER-NEFT*YESB0000001*YESAP00000000009*PAYTM PAYMENTS S--", " / ", "4430", " ", "34,406.02"),
+  // Someone's personal transfer into the same account — never a collection.
+  row("15 Aug 2026", "   BY TRANSFER-UPI/CR/000000000000/A PERSON/CNRB/someone/UPI--", " / ", "4430", " ", "5,000.00"),
+  // Outgoing spend from that account — a debit, so never counted.
+  row("17 Aug 2026", "   TO TRANSFER-INB Invoice/ Bill Payment--", " / ", "4430", "2,00,000.00", " "),
+].join("\n");
+
 describe("classify", () => {
   it("detects channels", () => {
     expect(classify("BY TRANSFER-NEFT*...*PhonePe Limited*--")).toBe("GPAY");
@@ -56,8 +73,41 @@ describe("classify", () => {
     expect(classify("TO TRANSFER-INB Edfs--")).toBe("OTHER");
   });
 
-  it("counts Paytm settlements as card money", () => {
-    expect(classify("BY TRANSFER-NEFT*UTIB0000022*AXNPM00000000001*PAYTM PAYMENTS S--")).toBe("POS");
+  it("counts a card-only Paytm settlement as card money", () => {
+    const n = "BY TRANSFER-NEFT*UTIB0000022*AXNPM00000000001*PAYTM PAYMENTS S--";
+    expect(classify(n, "2026-08-24")).toBe("POS");
+  });
+
+  it("refuses to attribute a combined Paytm settlement to a channel", () => {
+    const n = "BY TRANSFER-RTGS UTR NO: YESBR10000000000000000--PAYTM PAYMENTS SERVICES";
+    expect(classify(n, PAYTM_COMBINED_FROM)).toBe("OTHER");
+    expect(classify(n, "2026-09-30")).toBe("OTHER");
+    // The narration alone cannot tell the eras apart — only the date can.
+    expect(classify(n, "2026-08-24")).toBe("POS");
+  });
+});
+
+describe("parseStatement — combined Paytm settlements", () => {
+  const r = parseStatement(combinedSample);
+
+  it("keeps only the card-only day", () => {
+    expect(r.txns).toHaveLength(1);
+    expect(r.txns[0]).toMatchObject({
+      businessDate: "2026-08-24",
+      channel: "POS",
+      amount: 34406.02,
+    });
+  });
+
+  it("reports how many days need their split typed in", () => {
+    expect(r.skippedCombined).toBe(2);
+  });
+
+  it("leaves personal transfers and outgoing payments out", () => {
+    // 2 combined + the personal UPI credit; the debit is not a credit at all.
+    expect(r.skippedOther).toBe(3);
+    expect(r.txns.some((t) => t.amount === 5000)).toBe(false);
+    expect(r.txns.some((t) => t.amount === 200000)).toBe(false);
   });
 });
 

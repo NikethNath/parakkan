@@ -26,7 +26,11 @@ export async function POST(req: Request) {
     files.map(async (file) => ({ file, parsed: parseStatement(await file.text()) })),
   );
   const allTxns = statements.flatMap((s) => s.parsed.txns);
-  if (allTxns.length === 0) {
+  // A Paytm statement can legitimately hold nothing but combined settlements —
+  // every credit unattributable, so nothing to store, but the upload was still
+  // valid and the reply tells the admin how many days need a split typed in.
+  const combined = statements.reduce((n, s) => n + s.parsed.skippedCombined, 0);
+  if (allTxns.length === 0 && combined === 0) {
     return NextResponse.json(
       {
         error:
@@ -58,6 +62,7 @@ export async function POST(req: Request) {
     duplicates: number;
     gpay: number;
     pos: number;
+    needsSplit: number;
   }
   const results: FileResult[] = [];
   for (const { file, parsed } of statements) {
@@ -93,10 +98,13 @@ export async function POST(req: Request) {
       duplicates: parsed.txns.length - fresh.length,
       gpay: fresh.filter((t) => t.channel === "GPAY").length,
       pos: fresh.filter((t) => t.channel === "POS").length,
+      // Paytm settles UPI and card in one credit, so these can't be attributed
+      // to a channel — the day's split gets typed in on the reconcile table.
+      needsSplit: parsed.skippedCombined,
     });
   }
 
-  const total = (k: "found" | "inserted" | "duplicates" | "gpay" | "pos") =>
+  const total = (k: "found" | "inserted" | "duplicates" | "gpay" | "pos" | "needsSplit") =>
     results.reduce((s, r) => s + r[k], 0);
 
   return NextResponse.json({
@@ -108,5 +116,6 @@ export async function POST(req: Request) {
     duplicates: total("duplicates"),
     gpay: total("gpay"),
     pos: total("pos"),
+    needsSplit: total("needsSplit"),
   });
 }

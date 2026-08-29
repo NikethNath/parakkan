@@ -45,24 +45,24 @@ enum AttendanceStatus {
 }
 
 model User {
-  id            Int      @id @default(autoincrement())
+  id            Int       @id @default(autoincrement())
   name          String
-  username      String   @unique
+  username      String    @unique
   passwordHash  String
-  role          Role     @default(EMPLOYEE)
-  payType       PayType  @default(MONTHLY)
-  monthlySalary Decimal  @default(0) @db.Decimal(12, 2)
-  shiftRate     Decimal  @default(0) @db.Decimal(12, 2)
-  extraPay      Decimal  @default(0) @db.Decimal(12, 2) // fixed pay for extra duties
-  active        Boolean  @default(true)
+  role          Role      @default(EMPLOYEE)
+  payType       PayType   @default(MONTHLY)
+  monthlySalary Decimal   @default(0) @db.Decimal(12, 2)
+  shiftRate     Decimal   @default(0) @db.Decimal(12, 2)
+  extraPay      Decimal   @default(0) @db.Decimal(12, 2) // fixed pay for extra duties
+  active        Boolean   @default(true)
   // Set when the person left and the account was "deleted" from the staff page
   // while still owning records: hidden everywhere, username freed for a new
   // hire, but the row survives so their sheets keep their name and history.
   archivedAt    DateTime?
   phone         String?
-  joinedOn      DateTime @default(now())
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  joinedOn      DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   entries          DailyEntry[]    @relation("EmployeeEntries")
   partnerEntries   DailyEntry[]    @relation("PartnerEntries")
@@ -71,6 +71,7 @@ model User {
   attendance       Attendance[]
   audits           EntryAudit[]
   uploads          BankUpload[]
+  bankTxns         BankTxn[]       @relation("EnteredBankTxns")
   salaryPayments   SalaryPayment[] @relation("EmployeeSalaryPayments")
   recordedPayments SalaryPayment[] @relation("RecordedSalaryPayments")
 }
@@ -315,12 +316,21 @@ model BankUpload {
 }
 
 model BankTxn {
-  id             Int        @id @default(autoincrement())
-  upload         BankUpload @relation(fields: [uploadId], references: [id], onDelete: Cascade)
-  uploadId       Int
-  txnDate        DateTime   @db.Date
-  businessDate   DateTime   @db.Date
-  amount         Decimal    @db.Decimal(14, 2)
+  id             Int         @id @default(autoincrement())
+  // Null on a figure typed in by hand rather than parsed from a statement.
+  // Since Paytm settles UPI and card as one credit, the split for those days
+  // can only come from the Paytm app, so an admin enters it — see
+  // PAYTM_COMBINED_FROM in src/services/statement.ts.
+  upload         BankUpload? @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  uploadId       Int?
+  // Who typed it, when it was typed. Null on a parsed row. A typed figure for a
+  // (businessDate, channel) supersedes any parsed row for the same pair rather
+  // than adding to it — see preferTyped() in src/lib/bankFigures.ts.
+  enteredBy      User?       @relation("EnteredBankTxns", fields: [enteredById], references: [id])
+  enteredById    Int?
+  txnDate        DateTime    @db.Date
+  businessDate   DateTime    @db.Date
+  amount         Decimal     @db.Decimal(14, 2)
   channel        String // GPAY | POS
   narration      String?
   matchedEntryId Int?
