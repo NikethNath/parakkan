@@ -96,6 +96,9 @@ describe("parseStatement — combined Paytm settlements", () => {
       businessDate: "2026-08-24",
       channel: "POS",
       amount: 34406.02,
+      // Tagged as Paytm's own money, so importing the Paytm report for that day
+      // supersedes it instead of adding to it.
+      source: "PAYTM_BANK",
     });
   });
 
@@ -146,6 +149,10 @@ describe("parseStatement", () => {
   it("keeps only GPay and POS credits", () => {
     expect(r.txns).toHaveLength(5);
     expect(r.skippedOther).toBe(1); // the random NEFT credit
+  });
+
+  it("marks PhonePe and SBI credits as money that isn't Paytm's", () => {
+    expect(r.txns.every((t) => t.source === "STATEMENT")).toBe(true);
   });
 
   it("maps GPay with T+1 (business date = posting date − 1)", () => {

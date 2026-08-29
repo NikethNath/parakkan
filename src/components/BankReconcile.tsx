@@ -2,13 +2,12 @@
 
 import { useState } from "react";
 import { inr } from "@/lib/format";
-import ReconcileDayEditButton from "@/components/ReconcileDayEditButton";
 
 export type Side = {
-  /** Null when nothing has been parsed or typed for this day yet. */
+  /** Null when nothing has been recorded for this day yet. */
   bank: number | null;
-  /** True when the figure was typed in from the Paytm app. */
-  typed: boolean;
+  /** True when some of it came from the Paytm report rather than a statement. */
+  fromReport: boolean;
   entered: number;
 };
 export type Day = { date: string; gpay: Side; pos: Side };
@@ -51,14 +50,15 @@ export default function BankReconcile({ days }: { days: Day[] }) {
                 <th className="px-3 py-1.5 text-right font-medium">Received</th>
                 <th className="px-3 py-1.5 text-right font-medium">Entered by staff</th>
                 <th className="px-3 py-1.5 text-right font-medium">Δ</th>
-                <th className="px-3 py-1.5 text-right font-medium print:hidden"></th>
               </tr>
             </thead>
             <tbody>
               {days.map((day) => {
                 const side = day[channel];
-                // Nothing recorded yet is not a shortfall — every day since the
-                // Paytm switch is blank until the split is typed in.
+// Nothing recorded yet is not a shortfall — the Paytm report
+                // covering that day simply hasn't been imported.
+                // Nothing recorded is not a shortfall — it just means the Paytm
+                // report covering that day hasn't been imported.
                 const pending = side.bank === null;
                 const d = pending ? 0 : Math.round((side.entered - side.bank!) * 100) / 100;
                 const off = !pending && Math.abs(d) > TOL;
@@ -74,12 +74,12 @@ export default function BankReconcile({ days }: { days: Day[] }) {
                       ) : (
                         <>
                           {inr(side.bank!)}
-                          {side.typed && (
+                          {side.fromReport && (
                             <span
                               className="ml-1 text-xs text-faint"
-                              title="Typed in from the Paytm app"
+                              title="Includes figures from the Paytm report"
                             >
-                              ✎
+                              ✽
                             </span>
                           )}
                         </>
@@ -95,15 +95,6 @@ export default function BankReconcile({ days }: { days: Day[] }) {
                       }
                     >
                       {pending ? "—" : off ? `${d > 0 ? "+" : "−"}${inr(Math.abs(d))}` : "✓"}
-                    </td>
-                    <td className="px-3 py-1.5 text-right print:hidden">
-                      <ReconcileDayEditButton
-                        date={day.date}
-                        label={label(day.date)}
-                        gpay={day.gpay.typed ? day.gpay.bank : null}
-                        pos={day.pos.typed ? day.pos.bank : null}
-                        entered={{ gpay: day.gpay.entered, pos: day.pos.entered }}
-                      />
                     </td>
                   </tr>
                 );

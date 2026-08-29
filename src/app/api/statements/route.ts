@@ -84,6 +84,7 @@ export async function POST(req: Request) {
           businessDate: toDate(t.businessDate),
           amount: t.amount,
           channel: t.channel,
+          source: t.source,
           narration: t.narration,
         })),
       });

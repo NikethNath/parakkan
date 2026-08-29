@@ -32,6 +32,9 @@ export interface ParsedPaytmReport {
   /** Payment modes the rules didn't recognise — surfaced, never silently dropped. */
   unknownModes: string[];
   unknownModeRows: number;
+  /** Payments seen more than once across the files in one import — a part of a
+   *  split export overlapping another, or the same file picked twice. */
+  duplicateRows: number;
 }
 
 const cell = (v: unknown): string =>
@@ -56,15 +59,33 @@ export function classifyPaytmMode(mode: string): PaytmChannel | null {
   return null;
 }
 
-export function parsePaytmReport(text: string): ParsedPaytmReport {
+interface Acc {
+  byDay: Map<string, PaytmDayTotals>;
+  seenIds: Set<string>;
+  countedRows: number;
+  skippedRows: number;
+  duplicateRows: number;
+  unknownModeRows: number;
+  unknownModes: Set<string>;
+}
+
+const emptyAcc = (): Acc => ({
+  byDay: new Map(),
+  seenIds: new Set(),
+  countedRows: 0,
+  skippedRows: 0,
+  duplicateRows: 0,
+  unknownModeRows: 0,
+  unknownModes: new Set(),
+});
+
+function absorb(text: string, acc: Acc): void {
   const wb = XLSX.read(text, { type: "string", raw: true });
   const sheet = wb.Sheets[wb.SheetNames[0]];
   const aoa: unknown[][] = sheet
     ? XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: "" })
     : [];
-  if (aoa.length < 2) {
-    return { days: [], countedRows: 0, skippedRows: 0, unknownModes: [], unknownModeRows: 0 };
-  }
+  if (aoa.length < 2) return;
 
   // Look columns up by name — the export carries 100+ of them and their order
   // is not something to depend on.
@@ -75,15 +96,8 @@ export function parsePaytmReport(text: string): ParsedPaytmReport {
   const iAmount = col("Amount");
   const iMode = col("Payment_Mode");
   const iType = col("Transaction_Type");
-  if (iDate < 0 || iStatus < 0 || iAmount < 0 || iMode < 0) {
-    return { days: [], countedRows: 0, skippedRows: 0, unknownModes: [], unknownModeRows: 0 };
-  }
-
-  const byDay = new Map<string, PaytmDayTotals>();
-  let countedRows = 0;
-  let skippedRows = 0;
-  let unknownModeRows = 0;
-  const unknownModes = new Set<string>();
+  const iId = col("Transaction_ID");
+  if (iDate < 0 || iStatus < 0 || iAmount < 0 || iMode < 0) return;
 
   for (let i = 1; i < aoa.length; i++) {
     const row = aoa[i];
@@ -98,24 +112,36 @@ export function parsePaytmReport(text: string): ParsedPaytmReport {
       cell(row[iStatus]).toUpperCase() === "SUCCESS" &&
       (iType < 0 || cell(row[iType]).toUpperCase() === "ACQUIRING");
     if (!ok) {
-      skippedRows++;
+      acc.skippedRows++;
       continue;
+    }
+
+    // Paytm splits a long period into numbered files (`…_001.csv`, `…_002.csv`)
+    // and a weekly export overlaps a monthly one, so the same payment can turn
+    // up twice in a single import. Its id is what keeps it counted once.
+    const id = iId >= 0 ? cell(row[iId]) : "";
+    if (id) {
+      if (acc.seenIds.has(id)) {
+        acc.duplicateRows++;
+        continue;
+      }
+      acc.seenIds.add(id);
     }
 
     const amount = Number(cell(row[iAmount]));
     if (!Number.isFinite(amount) || amount <= 0) {
-      skippedRows++;
+      acc.skippedRows++;
       continue;
     }
 
     const channel = classifyPaytmMode(String(row[iMode]));
     if (!channel) {
-      unknownModes.add(cell(row[iMode]) || "(blank)");
-      unknownModeRows++;
+      acc.unknownModes.add(cell(row[iMode]) || "(blank)");
+      acc.unknownModeRows++;
       continue;
     }
 
-    const day = byDay.get(date) ?? { date, gpay: 0, pos: 0, gpayCount: 0, posCount: 0 };
+    const day = acc.byDay.get(date) ?? { date, gpay: 0, pos: 0, gpayCount: 0, posCount: 0 };
     if (channel === "GPAY") {
       day.gpay += amount;
       day.gpayCount++;
@@ -123,19 +149,36 @@ export function parsePaytmReport(text: string): ParsedPaytmReport {
       day.pos += amount;
       day.posCount++;
     }
-    byDay.set(date, day);
-    countedRows++;
+    acc.byDay.set(date, day);
+    acc.countedRows++;
   }
+}
 
-  const days = [...byDay.values()]
+const finish = (acc: Acc): ParsedPaytmReport => ({
+  days: [...acc.byDay.values()]
     .map((d) => ({ ...d, gpay: round2(d.gpay), pos: round2(d.pos) }))
-    .sort((a, b) => a.date.localeCompare(b.date));
+    .sort((a, b) => a.date.localeCompare(b.date)),
+  countedRows: acc.countedRows,
+  skippedRows: acc.skippedRows,
+  duplicateRows: acc.duplicateRows,
+  unknownModes: [...acc.unknownModes].sort(),
+  unknownModeRows: acc.unknownModeRows,
+});
 
-  return {
-    days,
-    countedRows,
-    skippedRows,
-    unknownModes: [...unknownModes].sort(),
-    unknownModeRows,
-  };
+export function parsePaytmReport(text: string): ParsedPaytmReport {
+  const acc = emptyAcc();
+  absorb(text, acc);
+  return finish(acc);
+}
+
+/**
+ * Parses several files as one import. Weekly and monthly exports arrive split
+ * across numbered parts, and a single day routinely straddles two of them — so
+ * the parts have to be summed *before* anything is written, since a day is
+ * stored by replacement. Payments repeated across files are counted once.
+ */
+export function parsePaytmReports(texts: string[]): ParsedPaytmReport {
+  const acc = emptyAcc();
+  for (const t of texts) absorb(t, acc);
+  return finish(acc);
 }

@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { inr, toNum, isoDate } from "@/lib/format";
-import { bankFigureAt, bankFigureSelect, preferTyped } from "@/lib/bankFigures";
+import { bankFigureAt, bankFigureSelect, sumBankFigures } from "@/lib/bankFigures";
 import BankReconcile, { type Day, type Side } from "@/components/BankReconcile";
 import PaytmReportUpload from "@/components/PaytmReportUpload";
 import AutoSubmitDate from "@/components/AutoSubmitDate";
@@ -33,9 +33,9 @@ export default async function ReconcilePage({
     prisma.bankTxn.count(),
   ]);
 
-  // A typed figure supersedes the parsed rows for the same day and channel
-  // rather than adding to them — see src/lib/bankFigures.ts.
-  const figures = preferTyped(bankTxns);
+  // Providers add up for a day; only the bank's own Paytm credit steps aside
+  // once the Paytm report covers that day — see src/lib/bankFigures.ts.
+  const figures = sumBankFigures(bankTxns);
 
   const enteredByDay = new Map<string, { gpay: number; pos: number }>();
   for (const e of entries) {
@@ -52,7 +52,7 @@ export default async function ReconcilePage({
 
   const side = (date: string, channel: "GPAY" | "POS", entered: number): Side => {
     const f = bankFigureAt(figures, date, channel);
-    return { bank: f ? f.amount : null, typed: f?.typed ?? false, entered };
+    return { bank: f ? f.amount : null, fromReport: f?.fromReport ?? false, entered };
   };
 
   const days: Day[] = dates.map((date) => {
@@ -64,7 +64,8 @@ export default async function ReconcilePage({
     };
   });
 
-  // Days that still need the Paytm split typed in.
+  // Days with nothing recorded yet — the Paytm report hasn't been imported for
+  // them, so there is nothing to reconcile against.
   const pending = days.filter((d) => d.gpay.bank === null || d.pos.bank === null).length;
 
   const monthLabel = start.toLocaleDateString("en-IN", {
@@ -92,9 +93,8 @@ export default async function ReconcilePage({
             </p>
             {pending > 0 && (
               <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
-                {pending} day{pending === 1 ? "" : "s"} still need the GPay/POS split typed
-                in — Paytm pays both into the bank as one credit, so use{" "}
-                <span className="font-medium">Enter</span> on those rows.
+                {pending} day{pending === 1 ? "" : "s"} have no figures yet — import the
+                Paytm report covering them.
               </p>
             )}
             <p className="mt-1 text-xs text-muted">

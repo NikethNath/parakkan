@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { toNum, isoDate, dayBoundsUTC } from "@/lib/format";
-import { bankFigureSelect, preferTyped } from "@/lib/bankFigures";
+import { bankFigureSelect, sumBankFigures } from "@/lib/bankFigures";
 
 /**
  * The per-day summary the accountant works from, shared by the on-screen table
@@ -152,10 +152,10 @@ export async function buildSummary(from: string, to: string): Promise<Summary> {
     r.gpayStaff += toNum(e.gpay);
     r.posStaff += toNum(e.pos);
   }
-  // A figure typed in from the Paytm app supersedes the parsed rows for that
-  // day and channel — the same rule the reconcile table uses, so this report
-  // and that screen can never disagree.
-  for (const [k, figure] of preferTyped(txns)) {
+  // Figures for a day add up across providers, minus the Paytm bank credit on
+  // days the Paytm report covers — the same rule the reconcile table uses, so
+  // this report and that screen can never disagree.
+  for (const [k, figure] of sumBankFigures(txns)) {
     const [date, channel] = k.split("|");
     const r = dayOf(new Date(`${date}T00:00:00.000Z`));
     if (channel === "GPAY") r.gpayStmt += figure.amount;

@@ -317,17 +317,24 @@ model BankUpload {
 
 model BankTxn {
   id             Int         @id @default(autoincrement())
-  // Null on a figure typed in by hand rather than parsed from a statement.
-  // Since Paytm settles UPI and card as one credit, the split for those days
-  // can only come from the Paytm app, so an admin enters it — see
-  // PAYTM_COMBINED_FROM in src/services/statement.ts.
+  // Null on a figure imported from the Paytm report rather than parsed from a
+  // bank statement — Paytm settles UPI and card as one credit, so from
+  // PAYTM_COMBINED_FROM (src/services/statement.ts) the statement can't split it.
   upload         BankUpload? @relation(fields: [uploadId], references: [id], onDelete: Cascade)
   uploadId       Int?
-  // Who typed it, when it was typed. Null on a parsed row. A typed figure for a
-  // (businessDate, channel) supersedes any parsed row for the same pair rather
-  // than adding to it — see preferTyped() in src/lib/bankFigures.ts.
+  // Who ran the import. Null on a row parsed straight from a bank statement.
   enteredBy      User?       @relation("EnteredBankTxns", fields: [enteredById], references: [id])
   enteredById    Int?
+  // Where the figure came from, which decides how a day's figures combine:
+  //   STATEMENT    — parsed from a bank statement, money that isn't Paytm's
+  //                  (PhonePe UPI, SBI BULK POSTING card)
+  //   PAYTM_BANK   — parsed from a bank statement, a Paytm settlement credit
+  //   PAYTM_REPORT — imported from the Paytm for Business transaction report
+  // A day's figures are summed, so 25 Aug 2026 correctly holds PhonePe's share
+  // plus Paytm's. The one exception is PAYTM_BANK, which is dropped once a
+  // PAYTM_REPORT exists for that day: the same money, reported better.
+  // See sumBankFigures() in src/lib/bankFigures.ts.
+  source         String      @default("STATEMENT")
   txnDate        DateTime    @db.Date
   businessDate   DateTime    @db.Date
   amount         Decimal     @db.Decimal(14, 2)

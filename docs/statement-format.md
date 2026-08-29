@@ -95,6 +95,14 @@ Parsed by `src/services/paytmReport.ts`, imported at `/api/reconcile/paytm-repor
 - One row per customer payment, ~115 columns. Values are wrapped in a **literal
   apostrophe** (`'2026-08-28 09:41:52'`), so strip quotes before use, and look
   columns up **by name** — the order is not worth depending on.
+- Daily, weekly and monthly exports are all available, and a long one arrives
+  **split into numbered parts** (`…_001.csv`, `…_002.csv`). Parts must be
+  imported **together**: a day routinely straddles two of them, and a day is
+  stored by replacement, so importing parts one at a time leaves the boundary
+  day holding only the last part's share. `parsePaytmReports()` sums the parts
+  before anything is written, and de-duplicates on `Transaction_ID` so an
+  overlapping weekly and monthly export can safely go in at once. The response
+  names every day whose existing figures were replaced.
 - Columns used, and only these: `Transaction_Date` (the collection moment → the
   business date), `Status`, `Transaction_Type`, `Amount`, `Payment_Mode`.
 - Counted only when `Status = SUCCESS` **and** `Transaction_Type = ACQUIRING`, so
@@ -116,10 +124,29 @@ Parsed by `src/services/paytmReport.ts`, imported at `/api/reconcile/paytm-repor
 It carries customer VPAs, mobile numbers, card last-4 digits and employee names.
 The route reads it from the request in memory, reduces it to two totals per day,
 and drops it — no disk write, no `BankUpload` row, no raw rows in the database.
-A real 491 KB / 746-transaction export leaves exactly **two** `BankTxn` rows.
+A real 491 KB / 746-transaction export leaves exactly **two** `BankTxn` rows; a
+month of 23,250 payments across three parts leaves 62, and imports in ~0.5 s.
 (The CRIS fetch does the same: `downloadXls` reads the export into memory and
 calls `download.delete()` immediately.)
 
-Imported figures are stored as `BankTxn` rows with `enteredById` set, so they
-supersede any parsed statement row for the same day and channel, and a re-import
-replaces rather than doubles up.
+### How a day's figures combine
+
+Every `BankTxn` carries a `source`, and `sumBankFigures()` uses it to decide
+whether figures **add** or **supersede**:
+
+| `source` | Meaning | Combining |
+| --- | --- | --- |
+| `STATEMENT` | Parsed from a bank statement, money that isn't Paytm's (PhonePe UPI, SBI BULK POSTING card) | **Adds** |
+| `PAYTM_BANK` | Parsed from a bank statement, a Paytm settlement credit | **Dropped** on any day a `PAYTM_REPORT` row exists — same money, told better |
+| `PAYTM_REPORT` | Imported from the Paytm transaction report | **Adds** |
+
+Adding is what makes the changeover day right: 25 Aug 2026 GPay is PhonePe's
+₹71,082.92 **plus** Paytm's share from the report. The `PAYTM_BANK` exception is
+what stops 7–24 Aug card money being counted twice — once from the Paytm NEFT
+credits already imported, once from the report covering the same days.
+
+Superseded `PAYTM_BANK` rows are skipped on read, never deleted, so re-uploading
+a statement can't double anything. An import replaces only previous
+`PAYTM_REPORT` rows for the days it covers.
+
+> Editing a day's GPay/POS by hand was removed — the report is the source.

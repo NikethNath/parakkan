@@ -14,11 +14,16 @@
 
 export type Channel = "GPAY" | "POS" | "OTHER";
 
+/** Where the money came through. `PAYTM_BANK` credits are superseded once the
+ *  Paytm report covers that day; everything else adds up. */
+export type BankSource = "STATEMENT" | "PAYTM_BANK";
+
 export interface ParsedTxn {
   txnDate: string; // YYYY-MM-DD, the bank posting date
   businessDate: string; // YYYY-MM-DD, the day it was actually collected
   amount: number;
   channel: Channel;
+  source: BankSource;
   narration: string;
 }
 
@@ -148,6 +153,7 @@ export function parseStatement(text: string): ParsedStatement {
     txns.push({
       txnDate: ymd(txn.y, txn.m, txn.d),
       businessDate,
+      source: isPaytm(narration.toLowerCase()) ? "PAYTM_BANK" : "STATEMENT",
       amount: Math.round(amount * 100) / 100,
       channel,
       narration,
