@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { toNum, isoDate } from "@/lib/format";
 
 /**
@@ -71,3 +72,56 @@ export const bankFigureAt = (
   date: string,
   channel: string,
 ): BankFigure | null => figures.get(key(date, channel)) ?? null;
+
+/** How a typed figure got there — shown nowhere, but it makes the row's origin
+ *  obvious when reading the table directly. */
+export const MANUAL_NARRATION = "Entered by hand from the Paytm Business app";
+export const CSV_NARRATION = "Imported from the Paytm Business report";
+
+export interface TypedDayFigures {
+  businessDate: string; // YYYY-MM-DD
+  gpay: number;
+  pos: number;
+}
+
+/**
+ * Writes the typed GPay/POS figures for whole days, replacing whatever was
+ * typed for those days before. Parsed statement rows are never touched — they
+ * are superseded on read by `preferTyped`, not deleted, so re-importing a
+ * statement still works.
+ *
+ * Shared by the per-day dialog and the Paytm CSV import so the two can't drift.
+ * Caller supplies a transaction, since the CSV writes a whole month at once.
+ */
+export async function saveTypedFigures(
+  tx: Prisma.TransactionClient,
+  days: TypedDayFigures[],
+  userId: number,
+  narration: string,
+): Promise<void> {
+  if (days.length === 0) return;
+  const dates = days.map((d) => new Date(`${d.businessDate}T00:00:00.000Z`));
+
+  await tx.bankTxn.deleteMany({
+    where: { businessDate: { in: dates }, enteredById: { not: null } },
+  });
+  await tx.bankTxn.createMany({
+    data: days.flatMap((d) => {
+      const date = new Date(`${d.businessDate}T00:00:00.000Z`);
+      return (
+        [
+          ["GPAY", d.gpay],
+          ["POS", d.pos],
+        ] as const
+      ).map(([channel, amount]) => ({
+        uploadId: null,
+        enteredById: userId,
+        txnDate: date,
+        businessDate: date,
+        amount,
+        channel,
+        narration,
+      }));
+    }),
+  });
+}

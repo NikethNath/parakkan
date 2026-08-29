@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 import { FUTURE_DATE_ERROR, isFutureBusinessDate } from "@/lib/businessDate";
+import { MANUAL_NARRATION, saveTypedFigures } from "@/lib/bankFigures";
 
 /**
  * Types in one day's GPay and POS totals, read off the Paytm Business app.
@@ -23,8 +24,6 @@ const bodySchema = z.object({
   gpay: amount,
   pos: amount,
 });
-
-const toDate = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
 
 export async function POST(req: Request) {
   const user = await getSessionUser();
@@ -48,30 +47,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: FUTURE_DATE_ERROR }, { status: 400 });
   }
 
-  const date = toDate(businessDate);
-  const narration = "Entered by hand from the Paytm Business app";
-
-  await prisma.$transaction(async (tx) => {
-    // Replace this day's typed figures wholesale — simpler than reconciling two
-    // channels in place, and parsed rows are left alone either way.
-    await tx.bankTxn.deleteMany({ where: { businessDate: date, enteredById: { not: null } } });
-    await tx.bankTxn.createMany({
-      data: (
-        [
-          ["GPAY", gpay],
-          ["POS", pos],
-        ] as const
-      ).map(([channel, value]) => ({
-        uploadId: null,
-        enteredById: user.uid,
-        txnDate: date,
-        businessDate: date,
-        amount: value,
-        channel,
-        narration,
-      })),
-    });
-  });
+  await prisma.$transaction((tx) =>
+    saveTypedFigures(tx, [{ businessDate, gpay, pos }], user.uid, MANUAL_NARRATION),
+  );
 
   return NextResponse.json({ ok: true, businessDate, gpay, pos });
 }

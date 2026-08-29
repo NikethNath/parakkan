@@ -12,11 +12,12 @@ Card money moved off SBI's own POS in Aug 2026, so a complete month now needs
 | main current a/c (`…4074`) | GPay (PhonePe) daily **until 26 Aug 2026**; card as `BULK POSTING` **until 19 Jul 2026** | `07/08/2026` |
 | Paytm settlement a/c (`…0613`) | card **from Aug 2026**; card **and UPI combined from 25 Aug 2026** | `7 Aug 2026` |
 
-> **The upload is currently hidden in the app.** Since 25 Aug 2026 a statement
-> can no longer supply either figure (see below), so GPay/POS are typed in per
-> day from the Paytm Business app on the reconcile page. `StatementUpload` and
-> `/api/statements` still work and can be re-enabled from
-> `src/app/admin/reconcile/page.tsx` if an older month ever needs importing.
+> **The bank statement upload is hidden in the app.** Since 25 Aug 2026 a
+> statement can no longer supply either figure (see below). GPay/POS now come
+> from the **Paytm for Business transaction report** — imported as CSV, or typed
+> per day — on the reconcile page. `StatementUpload` and `/api/statements` still
+> work and can be re-enabled from `src/app/admin/reconcile/page.tsx` if an older
+> month ever needs importing.
 
 The two exports are formatted slightly differently — same tab-separated shape
 and same column order, but the Paytm account writes dates as `7 Aug 2026` and
@@ -65,10 +66,10 @@ Only **Credit** rows are collections. Match on the Description text:
   in the `…0613` account. Both UTIB and YESB routing appear.
 - One credit per day, no DDMM tail — nothing in the row says which day it
   collected. Treated as **T+1**, the same as PhonePe: `businessDate = txnDate − 1`.
-  *(Inferred from Paytm's standard next-day POS settlement, not yet confirmed
-  against a day's counted card slips — check this against the sheets once a few
-  days have accumulated, and if it turns out to be same-day, the fix is the one
-  `shift(…, -1)` branch in `parseStatement`.)*
+  **Confirmed** from the Paytm report: every 28 Aug 2026 transaction carries
+  settlement UTR `YESBR1`**`20260829`**`…`, while the bank's own 28 Aug credit is
+  `YESBR1`**`20260828`**`…` — the UTR embeds the credit date, one day after
+  collection.
 
 ### POS / card swipe, SBI (until 19 Jul 2026)  → channel `POS`
 - Description contains **`BULK POSTING-SBIP_CR_PARAKKAN PETROLEUM`**, Branch Code `16899`.
@@ -85,3 +86,40 @@ Only **Credit** rows are collections. Match on the Description text:
 - For a given business date, sum employee-entered `gpay` across both shifts → compare to that date's bank `GPAY` credit.
 - Same for `pos` vs the aggregated `POS` (BULK POSTING) for that DDMM.
 - Flag variances beyond a small tolerance (rounding / pending settlements).
+
+
+## Paytm for Business transaction report (CSV) — the current source
+
+Parsed by `src/services/paytmReport.ts`, imported at `/api/reconcile/paytm-report`.
+
+- One row per customer payment, ~115 columns. Values are wrapped in a **literal
+  apostrophe** (`'2026-08-28 09:41:52'`), so strip quotes before use, and look
+  columns up **by name** — the order is not worth depending on.
+- Columns used, and only these: `Transaction_Date` (the collection moment → the
+  business date), `Status`, `Transaction_Type`, `Amount`, `Payment_Mode`.
+- Counted only when `Status = SUCCESS` **and** `Transaction_Type = ACQUIRING`, so
+  failures, aborts and refunds stay out.
+- `Amount` is used rather than `Settled_Amount` — the sheet records what the
+  customer paid at the pump, before Paytm's commission. (Commission is currently
+  ₹0, so they are equal.)
+
+### Mode → channel
+
+| `Payment_Mode` | Channel | Why |
+| --- | --- | --- |
+| `UPI`, `UPI_LITE`, `UPI_PPIWALLET`, `UPI_CREDIT_CARD` | **GPAY** | The customer scanned the QR. `UPI_CREDIT_CARD` is a RuPay credit card paid *over UPI* — staff record it as a UPI collection, not a swipe. **UPI is tested before CARD** for exactly this reason. |
+| `DEBIT_CARD`, `CREDIT_CARD` | **POS** | Swiped on the machine. |
+| anything else | *unclassified* | Never guessed at: counted, named in the response, and reported in the UI so the shortfall is visible. |
+
+### The file is never kept
+
+It carries customer VPAs, mobile numbers, card last-4 digits and employee names.
+The route reads it from the request in memory, reduces it to two totals per day,
+and drops it — no disk write, no `BankUpload` row, no raw rows in the database.
+A real 491 KB / 746-transaction export leaves exactly **two** `BankTxn` rows.
+(The CRIS fetch does the same: `downloadXls` reads the export into memory and
+calls `download.delete()` immediately.)
+
+Imported figures are stored as `BankTxn` rows with `enteredById` set, so they
+supersede any parsed statement row for the same day and channel, and a re-import
+replaces rather than doubles up.

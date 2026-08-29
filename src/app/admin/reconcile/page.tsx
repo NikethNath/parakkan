@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { inr, toNum, isoDate } from "@/lib/format";
 import { bankFigureAt, bankFigureSelect, preferTyped } from "@/lib/bankFigures";
 import BankReconcile, { type Day, type Side } from "@/components/BankReconcile";
+import PaytmReportUpload from "@/components/PaytmReportUpload";
 import AutoSubmitDate from "@/components/AutoSubmitDate";
 
 function monthBounds(month: string) {
@@ -74,7 +75,9 @@ export default async function ReconcilePage({
 
   return (
     <>
-      {/* The statement upload is hidden: PhonePe stopped crediting the main
+      <PaytmReportUpload />
+
+      {/* The bank statement upload is hidden: PhonePe stopped crediting the main
           account and Paytm now settles UPI and card as one credit, so a
           statement can no longer supply either figure — they're typed in per
           day instead. <StatementUpload /> and /api/statements still work; drop
