@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import { inr, toNum, isoDate } from "@/lib/format";
 import { bankFigureAt, bankFigureSelect, sumBankFigures } from "@/lib/bankFigures";
 import BankReconcile, { type Day, type Side } from "@/components/BankReconcile";
-import PaytmReportUpload from "@/components/PaytmReportUpload";
+import ReconcileImport from "@/components/ReconcileImport";
 import AutoSubmitDate from "@/components/AutoSubmitDate";
 
 function monthBounds(month: string) {
@@ -76,14 +76,8 @@ export default async function ReconcilePage({
 
   return (
     <>
-      <PaytmReportUpload />
+      <ReconcileImport />
 
-      {/* The bank statement upload is hidden: PhonePe stopped crediting the main
-          account and Paytm now settles UPI and card as one credit, so a
-          statement can no longer supply either figure — they're typed in per
-          day instead. <StatementUpload /> and /api/statements still work; drop
-          the component back in here if statement parsing is ever useful again
-          (e.g. importing an older month). */}
       <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
@@ -94,7 +88,7 @@ export default async function ReconcilePage({
             {pending > 0 && (
               <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
                 {pending} day{pending === 1 ? "" : "s"} have no figures yet — import the
-                Paytm report covering them.
+                Paytm report, and the bank statement for PhonePe money, covering them.
               </p>
             )}
             <p className="mt-1 text-xs text-muted">

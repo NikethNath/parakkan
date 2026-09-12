@@ -31,8 +31,8 @@ export interface ParsedStatement {
   accountNumber?: string;
   txns: ParsedTxn[];
   skippedOther: number;
-  /** Of those, the combined Paytm settlements — days whose GPay/POS split has
-   *  to be typed in by hand. Reported so the upload can say so. */
+  /** Of those, the combined Paytm settlements — days whose GPay/POS split only
+   *  the Paytm report can give. Reported so the import can say so. */
   skippedCombined: number;
 }
 
@@ -81,7 +81,7 @@ export function classify(narration: string, businessDate?: string): Channel {
   if (t.includes("bulk posting") && t.includes("sbip_cr_parakkan")) return "POS";
   if (isPaytm(t)) {
     // Combined settlements aren't attributable to a channel, so they're left
-    // out entirely; the day's GPay/POS split is typed in from the Paytm app.
+    // out entirely; the day's GPay/POS split comes from the Paytm report.
     return businessDate && businessDate >= PAYTM_COMBINED_FROM ? "OTHER" : "POS";
   }
   return "OTHER";

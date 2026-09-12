@@ -9,15 +9,35 @@ Card money moved off SBI's own POS in Aug 2026, so a complete month now needs
 
 | Account | Holds | Date format in rows |
 | --- | --- | --- |
-| main current a/c (`…4074`) | GPay (PhonePe) daily **until 26 Aug 2026**; card as `BULK POSTING` **until 19 Jul 2026** | `07/08/2026` |
+| main current a/c (`…4074`) | GPay (PhonePe) daily to 26 Aug 2026, and **a trickle ever since** — the old QR is still on the forecourt; card as `BULK POSTING` **until 19 Jul 2026** | `07/08/2026` |
 | Paytm settlement a/c (`…0613`) | card **from Aug 2026**; card **and UPI combined from 25 Aug 2026** | `7 Aug 2026` |
 
-> **The bank statement upload is hidden in the app.** Since 25 Aug 2026 a
-> statement can no longer supply either figure (see below). GPay/POS now come
-> from the **Paytm for Business transaction report** — imported as CSV, or typed
-> per day — on the reconcile page. `StatementUpload` and `/api/statements` still
-> work and can be re-enabled from `src/app/admin/reconcile/page.tsx` if an older
-> month ever needs importing.
+> **One import takes both files.** The reconcile page has a single picker
+> (`ReconcileImport` → `/api/reconcile/import`) that accepts the Paytm report,
+> a bank statement, or both at once. Neither alone is enough: only Paytm's
+> report can split a day into GPay and POS, and only the statement carries the
+> PhonePe money, which never appears in Paytm's report. **A day's GPay is the
+> two added together.**
+
+### Which file is which
+
+Decided by reading the file, not by its name — `detectImportKind` in
+[`src/services/importKind.ts`](../src/services/importKind.ts). Names are no
+help: SBI's export is tab-separated text with a misleading `.xls` extension and
+Paytm's parts are all `.csv`.
+
+- a line whose first tab-cell is exactly `Txn Date` → **statement**
+- a header line naming `Transaction_Date` and `Payment_Mode` → **Paytm report**
+- NULs or replacement characters in the first 512 bytes → a real spreadsheet,
+  refused with a message naming the right download
+
+That last case is worth knowing about: SBI's net banking also offers an
+**"Account Statement Report" workbook** (a genuine `.xlsx`, sometimes saved with
+a `.csv` name). It is a different layout — `Today Date | Value Date | Amount |
+Balance | Cheque Number | Narration | …` — and the ones on file carry no
+PhonePe, Paytm or `BULK POSTING` narrations at all, so it is not a substitute
+for the text export and is not parsed. One unrecognised file rejects the whole
+import rather than half of it.
 
 The two exports are formatted slightly differently — same tab-separated shape
 and same column order, but the Paytm account writes dates as `7 Aug 2026` and
@@ -44,9 +64,8 @@ Only **Credit** rows are collections. Match on the Description text:
 
 ### Combined UPI + card, Paytm (25 Aug 2026 →)  → **not attributable**
 - One credit covers UPI *and* card with no split anywhere in the row, so it is
-  **skipped** — counted in `skippedCombined` — rather than guessed at. The day's
-  GPay/POS figures are typed in by hand from the Paytm Business app and stored
-  as `BankTxn` rows with `enteredById` set.
+  **skipped** — counted in `skippedCombined` — rather than guessed at. That day's
+  GPay/POS figures come from the Paytm report instead.
 - The cut-off is the constant `PAYTM_COMBINED_FROM` in `src/services/statement.ts`.
   It has to be a **date**, not a narration test: the two eras differ only in NEFT
   vs RTGS (`BY TRANSFER-RTGS UTR NO: YESBR1…--PAYTM PAYMENTS SERVICES`), which
@@ -55,7 +74,7 @@ Only **Credit** rows are collections. Match on the Description text:
   ₹71,082.92) is a part-day covering 25 Aug, and Paytm's first large credit
   (26 Aug, ₹3,59,124.78) covers the same day.
 - **Settlement is no longer one-per-day** — nothing arrived on 27 Aug 2026. Days
-  are reconciled from the typed figures, so a gap in the bank is not a shortfall.
+  are reconciled from the report, so a gap in the bank is not a shortfall.
 - That account now also carries unrelated traffic (a personal UPI credit, and
   outgoing reimbursements/bill payments). Non-Paytm credits fall to `OTHER` and
   debits are ignored, as before.
@@ -90,7 +109,7 @@ Only **Credit** rows are collections. Match on the Description text:
 
 ## Paytm for Business transaction report (CSV) — the current source
 
-Parsed by `src/services/paytmReport.ts`, imported at `/api/reconcile/paytm-report`.
+Parsed by `src/services/paytmReport.ts`, imported at `/api/reconcile/import`.
 
 - One row per customer payment, ~115 columns. Values are wrapped in a **literal
   apostrophe** (`'2026-08-28 09:41:52'`), so strip quotes before use, and look
@@ -140,13 +159,18 @@ whether figures **add** or **supersede**:
 | `PAYTM_BANK` | Parsed from a bank statement, a Paytm settlement credit | **Dropped** on any day a `PAYTM_REPORT` row exists — same money, told better |
 | `PAYTM_REPORT` | Imported from the Paytm transaction report | **Adds** |
 
-Adding is what makes the changeover day right: 25 Aug 2026 GPay is PhonePe's
-₹71,082.92 **plus** Paytm's share from the report. The `PAYTM_BANK` exception is
-what stops 7–24 Aug card money being counted twice — once from the Paytm NEFT
-credits already imported, once from the report covering the same days.
+Adding is not just a changeover-day nicety. 25 Aug 2026 GPay is PhonePe's
+₹71,082.92 **plus** Paytm's share from the report — and since the old PhonePe QR
+is still in use, an ordinary day's GPay is likewise the report plus whatever
+PhonePe credited. The `PAYTM_BANK` exception is what stops 7–24 Aug card money
+being counted twice — once from the Paytm NEFT credits already imported, once
+from the report covering the same days.
+
+`sumBankFigures` also returns each day's `report` and `statement` share, which
+is what the import reply shows as “Paytm ₹A + bank ₹B”.
 
 Superseded `PAYTM_BANK` rows are skipped on read, never deleted, so re-uploading
 a statement can't double anything. An import replaces only previous
 `PAYTM_REPORT` rows for the days it covers.
 
-> Editing a day's GPay/POS by hand was removed — the report is the source.
+> Editing a day's GPay/POS by hand was removed — the two imports are the source.

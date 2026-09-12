@@ -4,10 +4,13 @@ import { toNum, isoDate } from "@/lib/format";
 /**
  * Resolves the money-received side of reconciliation for each day.
  *
- * A day's figures **add up**, because in 2026 a single day's collections can
- * arrive through more than one provider. 25 Aug 2026 is the clearest case: UPI
- * ran through PhonePe until the switch mid-day and through Paytm afterwards, so
- * that day's GPay is PhonePe's ₹71,082.92 *plus* whatever the Paytm report says.
+ * A day's figures **add up**, because a single day's collections can arrive
+ * through more than one provider. 25 Aug 2026 was the loudest case — UPI ran
+ * through PhonePe until the switch mid-day and through Paytm afterwards, so that
+ * day's GPay is PhonePe's ₹71,082.92 *plus* whatever the Paytm report says — but
+ * it is not a one-off: the old PhonePe QR is still on the forecourt and regulars
+ * keep scanning it, so a day's GPay is routinely the report plus a PhonePe
+ * credit off the bank statement.
  *
  * The one exception is `PAYTM_BANK` — a Paytm settlement credit read off the
  * bank statement. Once the Paytm report covers that day it describes the same
@@ -31,6 +34,11 @@ export interface BankFigure {
   amount: number;
   /** True when part of this came from the Paytm report rather than a statement. */
   fromReport: boolean;
+  /** The share of `amount` the Paytm report supplied. */
+  report: number;
+  /** The share a bank statement supplied — PhonePe UPI, or SBI's own card
+   *  settlements. `report + statement === amount`. */
+  statement: number;
 }
 
 /** Rows Prisma must return for this to work. */
@@ -65,9 +73,15 @@ export function sumBankFigures(rows: BankFigureRow[]): Map<string, BankFigure> {
     if (r.source === PAYTM_BANK && reportedDays.has(date)) continue;
 
     const k = key(date, r.channel);
-    const seen = out.get(k) ?? { amount: 0, fromReport: false };
-    seen.amount += toNum(r.amount);
-    seen.fromReport ||= r.source === PAYTM_REPORT;
+    const seen = out.get(k) ?? { amount: 0, fromReport: false, report: 0, statement: 0 };
+    const n = toNum(r.amount);
+    seen.amount += n;
+    if (r.source === PAYTM_REPORT) {
+      seen.report += n;
+      seen.fromReport = true;
+    } else {
+      seen.statement += n;
+    }
     out.set(k, seen);
   }
   return out;

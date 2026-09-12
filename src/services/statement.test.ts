@@ -50,7 +50,7 @@ const paytmSample = [
 ].join("\n");
 
 // From 25 Aug 2026 Paytm settles UPI and card together, so a credit says
-// nothing about the split. Those days are typed in by hand instead.
+// nothing about the split. Those days come from the Paytm report instead.
 const combinedSample = [
   `Account Number     :${T}_00000022222222222`,
   ["Txn Date", "Value Date", "Description", "Ref No./Cheque No.", "Branch Code", "        Debit", "Credit", "Balance", ""].join(T),

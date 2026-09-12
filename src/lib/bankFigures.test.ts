@@ -25,6 +25,37 @@ describe("sumBankFigures", () => {
     );
     expect(f?.amount).toBe(395082.92);
     expect(f?.fromReport).toBe(true);
+    // The import reply names each provider's share, so keep them apart.
+    expect(f?.report).toBe(324000);
+    expect(f?.statement).toBe(71082.92);
+  });
+
+  it("keeps counting PhonePe alongside Paytm after the switch", () => {
+    // Regulars still scan the old PhonePe QR, so a plain day is both providers.
+    const f = at(
+      [
+        row("2026-09-10", "GPAY", 1840, "STATEMENT"),
+        row("2026-09-10", "GPAY", 268430.5, "PAYTM_REPORT"),
+      ],
+      "2026-09-10",
+      "GPAY",
+    );
+    expect(f?.amount).toBe(270270.5);
+    expect(f?.report).toBe(268430.5);
+    expect(f?.statement).toBe(1840);
+  });
+
+  it("counts a superseded Paytm bank credit in neither share", () => {
+    const f = at(
+      [
+        row("2026-08-20", "POS", 25948.55, "PAYTM_BANK"),
+        row("2026-08-20", "POS", 25948.55, "PAYTM_REPORT"),
+      ],
+      "2026-08-20",
+      "POS",
+    );
+    expect(f?.report).toBe(25948.55);
+    expect(f?.statement).toBe(0);
   });
 
   it("does not count Paytm money twice when the report covers a day", () => {
