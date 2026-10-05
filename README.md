@@ -51,12 +51,21 @@ against the oil company's official records and the bank statement, and audited.
   sale litres against what staff entered. Disagreements are flagged to 0.1 L,
   and a flagged meter reading gets a one-click **"Fix → CRIS"** button that
   replaces it with the official value, recomputes the sheet, and logs the change.
-- **Bank statement reconciliation** — upload the bank's statement export and the
-  app matches GPay settlements (T+1 via the aggregator) and card batch postings
-  against the daily sheets, flagging gaps.
+- **Money-received reconciliation** — one import takes the Paytm for Business
+  transaction report, the bank's statement export, or both at once (each file is
+  recognised by its contents). The report splits a day into GPay and POS; the
+  statement supplies PhonePe money from the old QR, which Paytm never sees. A
+  day's GPay is the two added together, and both are matched against the daily
+  sheets with gaps flagged.
 - **Month-end payroll support** — a printable per-employee short/excess
   statement (with 50/50 partner splits) that drives the salary adjustment, plus
   a salary-advance ledger and an attendance register.
+- **Outlet overheads** — electricity, taxes, licence fees and the like, recorded
+  against the day they belong to whenever the bill arrives. Kept strictly apart
+  from till expenses: this money never passed through a shift's drawer, so it
+  moves nobody's short or excess. It shows as its own itemised panel and a
+  summary column for the owner and the accountant, and on its own sheet of the
+  Excel export.
 - Day-book style reports: monthly summary, per-employee short/excess, credit
   ledger, expense ledger, oil sales — plus dealer utilities (tank dip → litres
   chart, ASTM 3B density correction).
@@ -149,7 +158,9 @@ product, one shift; raw inputs + computed snapshot + status) → child lines
 (`OilLine`, `ExpenseLine`, `SalaryLine`, `CreditLine`) and `EntryAudit` (append-only
 change log). `Attendance` is auto-synced from sheets. `CrisDaily` /
 `CrisPumpDaily` store the portal's official figures; `BankUpload` / `BankTxn`
-store parsed statement rows and their matches. Full schema:
+store parsed statement rows and their matches. `OutletExpense` /
+`OutletExpenseCategory` stand apart from all of that — the outlet's own running
+costs, attached to no sheet and to no till. Full schema:
 [prisma/schema.prisma](prisma/schema.prisma).
 
 ## Running locally

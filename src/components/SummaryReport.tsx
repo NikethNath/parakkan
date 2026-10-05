@@ -1,5 +1,6 @@
 import { inr, istToday, dayLabel } from "@/lib/format";
 import { buildSummary, emptySummaryRow, SUMMARY_COLS, type Summary } from "@/lib/summary";
+import OverheadsPanel from "@/components/OverheadsPanel";
 import PrintButton from "@/components/PrintButton";
 import AutoSubmitDate from "@/components/AutoSubmitDate";
 
@@ -31,9 +32,9 @@ export default async function SummaryReport({
   const lo = !hasRange ? "" : fromRaw <= toRaw ? fromRaw : toRaw;
   const hi = !hasRange ? "" : fromRaw <= toRaw ? toRaw : fromRaw;
 
-  const { days, totals }: Summary = hasRange
+  const { days, totals, overheads }: Summary = hasRange
     ? await buildSummary(lo, hi)
-    : { days: [], totals: emptySummaryRow() };
+    : { days: [], totals: emptySummaryRow(), overheads: [] };
 
   return (
     <>
@@ -136,6 +137,8 @@ export default async function SummaryReport({
           </p>
         </section>
       )}
+
+      {hasRange && <OverheadsPanel items={overheads} from={lo} to={hi} />}
     </>
   );
 }

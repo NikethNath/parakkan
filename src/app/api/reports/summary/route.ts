@@ -8,6 +8,8 @@ import { dayLabel } from "@/lib/format";
  * Excel export of the accountant's daily summary — the same numbers as the
  * on-screen table (both come from `buildSummary`), written as real numbers so
  * they can be totalled and pivoted in Excel rather than re-typed.
+ *
+ * Two sheets: the per-day summary, and the outlet's overheads itemised.
  */
 
 const isDate = (s: string | null): s is string => /^\d{4}-\d{2}-\d{2}$/.test(s ?? "");
@@ -34,7 +36,7 @@ export async function GET(req: Request) {
   }
   const [from, to] = fromRaw <= toRaw ? [fromRaw, toRaw] : [toRaw, fromRaw];
 
-  const { days, totals } = await buildSummary(from, to);
+  const { days, totals, overheads } = await buildSummary(from, to);
 
   const header = ["Date", ...SUMMARY_COLS.map((c) => c.label)];
   const body = days.map(({ date, row }) => [
@@ -65,6 +67,27 @@ export async function GET(req: Request) {
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Daily summary");
+
+  // The outlet's own running costs, itemised on their own sheet. The daily sheet
+  // carries the per-day total in its Overheads column; what the money actually
+  // was only fits here.
+  const oTotal = overheads.reduce((n, o) => n + o.amount, 0);
+  const oWs = XLSX.utils.aoa_to_sheet([
+    [`Outlet overheads — ${dayLabel(from)} to ${dayLabel(to)}`],
+    ["Not part of any shift's short/excess — this money never passed through the till."],
+    [],
+    ["Date", "Category", "Note", "Amount"],
+    ...overheads.map((o) => [dayLabel(o.date), o.category, o.note ?? "", o.amount]),
+    ["Total", "", "", oTotal],
+  ]);
+  const oFirstRow = 4; // 0-based: title, caption, blank, header
+  for (let r = oFirstRow; r < oFirstRow + overheads.length + 1; r++) {
+    const cell = oWs[XLSX.utils.encode_cell({ r, c: 3 })];
+    if (cell && typeof cell.v === "number") cell.z = FORMAT.money;
+  }
+  oWs["!cols"] = [{ wch: 14 }, { wch: 22 }, { wch: 40 }, { wch: 14 }];
+  oWs["!freeze"] = { ySplit: "4" };
+  XLSX.utils.book_append_sheet(wb, oWs, "Overheads");
   const buf: Buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
 
   return new NextResponse(new Uint8Array(buf), {

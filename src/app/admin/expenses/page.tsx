@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/db";
-import { inr, toNum, istToday, dayBoundsUTC, dayLabel } from "@/lib/format";
+import { inr, toNum, isoDate, istToday, dayBoundsUTC, dayLabel } from "@/lib/format";
 import AutoSubmitDate from "@/components/AutoSubmitDate";
+import MasterListManager from "@/components/MasterListManager";
+import OverheadRecorder, { type OverheadRow } from "@/components/OverheadRecorder";
 
 const isDate = (s?: string) => /^\d{4}-\d{2}-\d{2}$/.test(s ?? "");
 
@@ -18,29 +20,61 @@ export default async function ExpensesPage({
 }) {
   const sp = await searchParams;
   const today = istToday();
-  // No default range — pick a start and end date to load the expenses.
+  // No default range for till expenses — pick a start and end date to load them.
   const hasRange = isDate(sp.from) && isDate(sp.to);
   const fromRaw = isDate(sp.from) ? sp.from! : "";
   const toRaw = isDate(sp.to) ? sp.to! : "";
   const lo = !hasRange ? "" : fromRaw <= toRaw ? fromRaw : toRaw;
   const hi = !hasRange ? "" : fromRaw <= toRaw ? toRaw : fromRaw;
 
-  const lines: ExpenseRow[] = hasRange
-    ? await prisma.expenseLine.findMany({
-        where: {
-          entry: { businessDate: { gte: dayBoundsUTC(lo).start, lt: dayBoundsUTC(hi).end } },
-        },
-        orderBy: [{ entry: { businessDate: "desc" } }, { id: "desc" }],
-        select: {
-          id: true,
-          amount: true,
-          description: true,
-          entry: { select: { businessDate: true, employee: { select: { name: true } } } },
-        },
-      })
-    : [];
+  // Overheads are recorded here, so this section always has something to show:
+  // it follows the picked range, and falls back to the current month so the
+  // cost you just added is on screen without having to set a filter first.
+  const oLo = hasRange ? lo : `${today.slice(0, 7)}-01`;
+  const oHi = hasRange ? hi : today;
+
+  const [lines, overheads, categories] = await Promise.all([
+    hasRange
+      ? prisma.expenseLine.findMany({
+          where: {
+            entry: { businessDate: { gte: dayBoundsUTC(lo).start, lt: dayBoundsUTC(hi).end } },
+          },
+          orderBy: [{ entry: { businessDate: "desc" } }, { id: "desc" }],
+          select: {
+            id: true,
+            amount: true,
+            description: true,
+            entry: { select: { businessDate: true, employee: { select: { name: true } } } },
+          },
+        })
+      : Promise.resolve([] as ExpenseRow[]),
+    prisma.outletExpense.findMany({
+      where: { billDate: { gte: dayBoundsUTC(oLo).start, lt: dayBoundsUTC(oHi).end } },
+      orderBy: [{ billDate: "desc" }, { id: "desc" }],
+      select: {
+        id: true,
+        billDate: true,
+        note: true,
+        amount: true,
+        category: { select: { name: true } },
+        recordedBy: { select: { name: true } },
+      },
+    }),
+    prisma.outletExpenseCategory.findMany({
+      orderBy: [{ active: "desc" }, { name: "asc" }],
+      include: { _count: { select: { expenses: true } } },
+    }),
+  ]);
 
   const total = lines.reduce((s, l) => s + toNum(l.amount), 0);
+  const overheadRows: OverheadRow[] = overheads.map((o) => ({
+    id: o.id,
+    date: isoDate(o.billDate),
+    category: o.category.name,
+    note: o.note,
+    amount: toNum(o.amount),
+    recordedBy: o.recordedBy?.name ?? null,
+  }));
 
   return (
     <div className="space-y-4 pb-6">
@@ -67,22 +101,34 @@ export default async function ExpensesPage({
         </label>
       </form>
 
+      <OverheadRecorder
+        categories={categories.filter((c) => c.active).map((c) => ({ id: c.id, name: c.name }))}
+        items={overheadRows}
+        from={oLo}
+        to={oHi}
+        today={today}
+      />
+
       {!hasRange ? (
         <p className="px-1 text-sm text-muted">
-          Pick a start and end date to see the expenses for that period.
+          Pick a start and end date to see the till expenses for that period.
         </p>
       ) : (
         <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
-          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
-              Expenses · {dayLabel(lo)} – {dayLabel(hi)}
+              Till expenses · {dayLabel(lo)} – {dayLabel(hi)}
             </h2>
             <p className="text-xs text-muted">
               {lines.length} {lines.length === 1 ? "entry" : "entries"} · {inr(total)} total
             </p>
           </div>
+          <p className="mb-3 text-xs text-faint">
+            Money staff took out of the drawer during a shift, so these do count towards
+            that sheet&apos;s short or excess.
+          </p>
           {lines.length === 0 ? (
-            <p className="py-6 text-center text-sm text-faint">No expenses in this period.</p>
+            <p className="py-6 text-center text-sm text-faint">No till expenses in this period.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -123,6 +169,18 @@ export default async function ExpensesPage({
           )}
         </section>
       )}
+
+      <MasterListManager
+        title="Overhead categories"
+        endpoint="/api/outlet-expense-categories"
+        noun="category"
+        items={categories.map((c) => ({
+          id: c.id,
+          name: c.name,
+          active: c.active,
+          count: c._count.expenses,
+        }))}
+      />
     </div>
   );
 }

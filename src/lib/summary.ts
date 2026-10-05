@@ -10,6 +10,11 @@ import { bankFigureSelect, sumBankFigures } from "@/lib/bankFigures";
  * adding field by field. Anything that must NOT be summed (a rate) is derived
  * from those sums instead, which also makes the total row a correctly
  * value-weighted average when the pump rate changed inside the period.
+ *
+ * It also carries the outlet's **overheads** — electricity, taxes, licence fees.
+ * Those are the business's own costs, not the till's, so they add a column and a
+ * list of their own and move no sheet's short/excess. A bill can fall on a day
+ * with no trading, so an overhead is reason enough for a day to appear here.
  */
 
 export interface SummaryRow {
@@ -28,6 +33,9 @@ export interface SummaryRow {
   gpayStaff: number;
   posStmt: number;
   posStaff: number;
+  /** Outlet overheads booked to this day — electricity, taxes, licence fees.
+   *  Nothing to do with the till, so no sheet's short/excess moves with it. */
+  overhead: number;
 }
 
 export const SUMMARY_KEYS = [
@@ -46,6 +54,7 @@ export const SUMMARY_KEYS = [
   "gpayStaff",
   "posStmt",
   "posStaff",
+  "overhead",
 ] as const;
 
 export type SummaryKind = "L" | "money" | "rate";
@@ -80,14 +89,26 @@ export const SUMMARY_COLS: SummaryCol[] = [
   { label: "GPay (staff)", kind: "money", value: (r) => r.gpayStaff },
   { label: "POS (received)", kind: "money", value: (r) => r.posStmt },
   { label: "POS (staff)", kind: "money", value: (r) => r.posStaff },
+  { label: "Overheads", kind: "money", value: (r) => r.overhead },
 ];
 
 export const emptySummaryRow = (): SummaryRow =>
   Object.fromEntries(SUMMARY_KEYS.map((k) => [k, 0])) as unknown as SummaryRow;
 
+/** One overhead, itemised. The per-day `overhead` figure says how much; this
+ *  says what it was, which is the part worth reading. */
+export interface OverheadItem {
+  id: number;
+  date: string; // YYYY-MM-DD
+  category: string;
+  note: string | null;
+  amount: number;
+}
+
 export interface Summary {
   days: { date: string; row: SummaryRow }[];
   totals: SummaryRow;
+  overheads: OverheadItem[];
 }
 
 /** `from`/`to` are inclusive YYYY-MM-DD business dates. */
@@ -95,7 +116,7 @@ export async function buildSummary(from: string, to: string): Promise<Summary> {
   const start = new Date(`${from}T00:00:00.000Z`);
   const endExclusive = dayBoundsUTC(to).end;
 
-  const [entries, txns] = await Promise.all([
+  const [entries, txns, overheads] = await Promise.all([
     prisma.dailyEntry.findMany({
       where: { businessDate: { gte: start, lt: endExclusive } },
       select: {
@@ -116,6 +137,17 @@ export async function buildSummary(from: string, to: string): Promise<Summary> {
     prisma.bankTxn.findMany({
       where: { businessDate: { gte: start, lt: endExclusive } },
       select: bankFigureSelect,
+    }),
+    prisma.outletExpense.findMany({
+      where: { billDate: { gte: start, lt: endExclusive } },
+      orderBy: [{ billDate: "asc" }, { id: "asc" }],
+      select: {
+        id: true,
+        billDate: true,
+        note: true,
+        amount: true,
+        category: { select: { name: true } },
+      },
     }),
   ]);
 
@@ -162,6 +194,12 @@ export async function buildSummary(from: string, to: string): Promise<Summary> {
     else if (channel === "POS") r.posStmt += figure.amount;
   }
 
+  // Overheads are the outlet's own costs, not the till's — they add a column and
+  // never touch cash, GPay/POS or short/excess. A bill can fall on a day with no
+  // trading at all (a month-end charge on a closed day), which is why this can
+  // introduce a day the sheets and bank never mentioned.
+  for (const o of overheads) dayOf(o.billDate).overhead += toNum(o.amount);
+
   const days = [...map.entries()]
     .sort((a, b) => (a[0] < b[0] ? -1 : 1)) // oldest first
     .map(([date, row]) => ({ date, row }));
@@ -169,5 +207,15 @@ export async function buildSummary(from: string, to: string): Promise<Summary> {
   const totals = emptySummaryRow();
   for (const { row } of days) for (const k of SUMMARY_KEYS) totals[k] += row[k];
 
-  return { days, totals };
+  return {
+    days,
+    totals,
+    overheads: overheads.map((o) => ({
+      id: o.id,
+      date: isoDate(o.billDate),
+      category: o.category.name,
+      note: o.note,
+      amount: toNum(o.amount),
+    })),
+  };
 }
