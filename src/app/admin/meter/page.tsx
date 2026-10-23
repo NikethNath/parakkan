@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { crisStatus } from "@/lib/crisCreds";
-import { isoDate, istToday, dayBoundsUTC, dayLabel, toNum } from "@/lib/format";
+import { inr, isoDate, istToday, dayBoundsUTC, dayLabel, toNum } from "@/lib/format";
 import AutoSubmitDate from "@/components/AutoSubmitDate";
 import AutoSubmitSelect from "@/components/AutoSubmitSelect";
 import CrisMeterFetchForm from "@/components/CrisMeterFetchForm";
@@ -12,6 +12,8 @@ import {
   type MissingSlot,
   type Reading,
 } from "@/lib/meterAlign";
+import { handoverRows, type HandoverRow, type HandoverSide } from "@/lib/meterHandover";
+import HandoverTable from "@/components/HandoverTable";
 
 const isDate = (s?: string) => /^\d{4}-\d{2}-\d{2}$/.test(s ?? "");
 
@@ -26,11 +28,16 @@ type Side = {
   // Sheet nozzles with no reading for that side — offered a "Fill ← CRIS".
   missOpen: MissingSlot[];
   missClose: MissingSlot[];
-  // Midday totalizers (morning closes / evening opens) — used to complete a
-  // fully blank nozzle pair on the other shift's sheet.
-  midFromMorning: number[];
-  midFromEvening: number[];
+  // The midday totalizers, with enough about their sheets to compare the two
+  // sides and repair whichever was typed wrong. Morning closes and evening
+  // opens are the same dial read once, so they must agree — see
+  // src/lib/meterHandover.ts. Their plain values also complete a fully blank
+  // nozzle pair on the other shift's sheet.
+  handMorning: HandoverSide[];
+  handEvening: HandoverSide[];
 };
+/** Which reading the table shows. "handover" lists the midday disagreements. */
+type View = "open" | "close" | "handover";
 type CrisSide = { open: number[]; close: number[] };
 type Row = {
   date: string;
@@ -45,8 +52,8 @@ const emptySide = (): Side => ({
   close: [],
   missOpen: [],
   missClose: [],
-  midFromMorning: [],
-  midFromEvening: [],
+  handMorning: [],
+  handEvening: [],
 });
 
 const fmt = (n: number | undefined) =>
@@ -116,8 +123,13 @@ export default async function MeterPage({
 }) {
   const sp = await searchParams;
   const today = istToday();
-  // Which reading to show: day openings (default) or day closings.
-  const view: keyof Side = sp.view === "close" ? "close" : "open";
+  // Which reading to show: day openings (default), day closings, or the midday
+  // handover disagreements.
+  const view: View =
+    sp.view === "close" ? "close" : sp.view === "handover" ? "handover" : "open";
+  // Which of the two reading columns the ledger table shows. The handover view
+  // renders its own table, so it falls back to the opening here.
+  const readingSide: "open" | "close" = view === "close" ? "close" : "open";
   // No default range — pick a start and end date to load the readings.
   const hasRange = isDate(sp.from) && isDate(sp.to);
   const fromRaw = isDate(sp.from) ? sp.from! : "";
@@ -142,6 +154,10 @@ export default async function MeterPage({
           n1Close: true,
           n2Open: true,
           n2Close: true,
+          // Needed to work out which shift's reading is the wrong one: the
+          // gap × rate should show up in that sheet's short/excess.
+          rate: true,
+          shortExcess: true,
           employee: { select: { name: true } },
         },
       })
@@ -188,12 +204,26 @@ export default async function MeterPage({
       { o: n1o, c: n1c, fo: "n1Open", fc: "n1Close" },
       { o: n2o, c: n2c, fo: "n2Open", fc: "n2Close" },
     ] as const;
+    const rate = toNum(e.rate);
+    const shortExcess = toNum(e.shortExcess);
     if (e.shift === "MORNING") {
       for (const p of pairs) {
         if (p.o > 0 && p.c > 0) {
           const v = pickOpening(p.o, p.c);
           side.open.push({ v, by, entryId: e.id, field: v === p.o ? p.fo : p.fc });
-          side.midFromMorning.push(pickClosing(p.o, p.c)); // morning close = midday
+          // The morning's closing is the midday reading. Its field is whichever
+          // column actually holds it, and its bound is the day's opening — a
+          // repair must not be written below that.
+          const close = pickClosing(p.o, p.c);
+          side.handMorning.push({
+            entryId: e.id,
+            field: close === p.c ? p.fc : p.fo,
+            value: close,
+            by,
+            rate,
+            shortExcess,
+            bound: v,
+          });
         } else if (p.o > 0) {
           side.open.push({ v: p.o, by, entryId: e.id, field: p.fo });
         } else if (p.c > 0) {
@@ -207,7 +237,18 @@ export default async function MeterPage({
         if (p.o > 0 && p.c > 0) {
           const v = pickClosing(p.o, p.c);
           side.close.push({ v, by, entryId: e.id, field: v === p.c ? p.fc : p.fo });
-          side.midFromEvening.push(pickOpening(p.o, p.c)); // evening open = midday
+          // The evening's opening is the same midday reading, bounded above by
+          // its own closing.
+          const open = pickOpening(p.o, p.c);
+          side.handEvening.push({
+            entryId: e.id,
+            field: open === p.o ? p.fo : p.fc,
+            value: open,
+            by,
+            rate,
+            shortExcess,
+            bound: v,
+          });
         } else if (p.c > 0) {
           side.close.push({ v: p.c, by, entryId: e.id, field: p.fc });
         } else if (p.o > 0) {
@@ -227,6 +268,18 @@ export default async function MeterPage({
   }
   // Chronological ledger: oldest day at the top, most recent at the bottom.
   const rows = [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
+  // Midday disagreements across the whole loaded range, so the warning strip
+  // shows up whichever view is on screen.
+  const mismatches: { date: string; product: "MS" | "HSD"; row: HandoverRow }[] = rows.flatMap(
+    (r) =>
+      (["MS", "HSD"] as const).flatMap((product) =>
+        handoverRows(
+          product === "MS" ? r.ms.handMorning : r.hsd.handMorning,
+          product === "MS" ? r.ms.handEvening : r.hsd.handEvening,
+        ).map((row) => ({ date: r.date, product, row })),
+      ),
+  );
+  const mismatchDays = new Set(mismatches.map((m) => m.date)).size;
   // Submission order is unreliable, so sort each product's readings ascending
   // (MS and HSD independently) — N1 is the lowest, up to the highest. CRIS
   // readings are sorted the same way so the columns line up for comparison.
@@ -234,6 +287,8 @@ export default async function MeterPage({
     for (const side of [r.ms, r.hsd]) {
       side.open.sort((a, b) => a.v - b.v);
       side.close.sort((a, b) => a.v - b.v);
+      side.handMorning.sort((a, b) => a.value - b.value);
+      side.handEvening.sort((a, b) => a.value - b.value);
     }
     for (const side of [r.cris?.ms, r.cris?.hsd]) {
       side?.open.sort((a, b) => a - b);
@@ -277,16 +332,39 @@ export default async function MeterPage({
           >
             <option value="open">Opening</option>
             <option value="close">Closing</option>
+            <option value="handover">Midday handover</option>
           </AutoSubmitSelect>
         </label>
       </form>
 
       <CrisMeterFetchForm configured={configured} />
 
+      {mismatches.length > 0 && view !== "handover" && (
+        <div className="rounded-xl border border-red-300 bg-red-50 p-3 text-sm dark:border-red-500/40 dark:bg-red-500/10 print:hidden">
+          <strong className="font-semibold text-red-700 dark:text-red-300">
+            {mismatches.length} midday handover {mismatches.length === 1 ? "reading" : "readings"}{" "}
+            {mismatches.length === 1 ? "does" : "do"} not match
+          </strong>{" "}
+          <span className="text-red-700 dark:text-red-300">
+            on {mismatchDays} {mismatchDays === 1 ? "day" : "days"} — a morning closing and the
+            evening opening after it are the same dial, so one sheet was typed wrong and that
+            day&apos;s litres are out.
+          </span>{" "}
+          <a
+            href={`/admin/meter?from=${lo}&to=${hi}&view=handover`}
+            className="font-medium text-red-700 underline dark:text-red-300"
+          >
+            Fix {mismatches.length === 1 ? "it" : "them"} →
+          </a>
+        </div>
+      )}
+
       {!hasRange ? (
         <p className="px-1 text-sm text-muted">
           Pick a start and end date to see the day&apos;s opening and closing meter readings.
         </p>
+      ) : view === "handover" ? (
+        <HandoverTable items={mismatches} from={lo} to={hi} />
       ) : (
         <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">
           <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
@@ -358,17 +436,25 @@ export default async function MeterPage({
                 </thead>
                 <tbody>
                   {rows.map((r) => {
-                    const msCells = alignSide(r.ms[view], r.cris?.ms[view], MS_NOZZLES);
-                    const hsdCells = alignSide(r.hsd[view], r.cris?.hsd[view], HSD_NOZZLES);
+                    const msCells = alignSide(
+                      r.ms[readingSide],
+                      r.cris?.ms[readingSide],
+                      MS_NOZZLES,
+                    );
+                    const hsdCells = alignSide(
+                      r.hsd[readingSide],
+                      r.cris?.hsd[readingSide],
+                      HSD_NOZZLES,
+                    );
                     // Official-only cells offer to fill the sheet's missing
                     // reading(s); a blank pair completes its other side from
                     // the counterpart shift's midday totalizer.
-                    if (view === "open") {
-                      assignFills(msCells, r.ms.missOpen, r.ms.midFromEvening);
-                      assignFills(hsdCells, r.hsd.missOpen, r.hsd.midFromEvening);
+                    if (readingSide === "open") {
+                      assignFills(msCells, r.ms.missOpen, r.ms.handEvening.map((h) => h.value));
+                      assignFills(hsdCells, r.hsd.missOpen, r.hsd.handEvening.map((h) => h.value));
                     } else {
-                      assignFills(msCells, r.ms.missClose, r.ms.midFromMorning);
-                      assignFills(hsdCells, r.hsd.missClose, r.hsd.midFromMorning);
+                      assignFills(msCells, r.ms.missClose, r.ms.handMorning.map((h) => h.value));
+                      assignFills(hsdCells, r.hsd.missClose, r.hsd.handMorning.map((h) => h.value));
                     }
                     return (
                       <tr key={r.date} className="border-t border-border">

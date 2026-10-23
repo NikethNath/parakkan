@@ -57,6 +57,12 @@ against the oil company's official records and the bank statement, and audited.
   statement supplies PhonePe money from the old QR, which Paytm never sees. A
   day's GPay is the two added together, and both are matched against the daily
   sheets with gaps flagged.
+- **Midday handover check** — a morning closing and the evening opening after
+  it are one reading of one dial, so they must agree. When they don't, the Meter
+  tab flags it, says how many litres the day is out by, and names the sheet that
+  was most likely typed wrong — worked out from the cash, since the mis-typed
+  sheet carries a short or excess of about gap × rate while the other balances.
+  One click rewrites that reading, recomputes the sheet and logs the change.
 - **Month-end payroll support** — a printable per-employee short/excess
   statement (with 50/50 partner splits) that drives the salary adjustment, plus
   a salary-advance ledger and an attendance register.
