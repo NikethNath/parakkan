@@ -33,6 +33,20 @@ export interface DocumentView {
 // Renewals
 // ---------------------------------------------------------------------------
 
+/**
+ * Archive folders hold superseded paper — an expired licence kept after its
+ * renewal. By the outlet's convention their codes start with Z ("Z-1", "z-2"),
+ * and nothing in them needs renewing: their documents never show a due date,
+ * never count as overdue, and can't be marked renewed.
+ *
+ * Read off the code rather than stored as a flag, so the rule is exactly the
+ * one written on the spine and can't drift from it — renaming a folder to Z-3
+ * archives everything in it at once.
+ */
+export const ARCHIVE_PREFIX = "z";
+export const isArchiveFolder = (folder?: Pick<DocFolderView, "code"> | null): boolean =>
+  !!folder && folder.code.trim().toLowerCase().startsWith(ARCHIVE_PREFIX);
+
 /** A document due within this many days is flagged as coming up. */
 export const DUE_SOON_DAYS = 30;
 
@@ -84,9 +98,14 @@ export interface RenewalStatus {
 const dayNumber = (iso: string) => Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) / 86_400_000;
 
 /** `today` is passed in (IST, YYYY-MM-DD) so the server and the browser agree
- *  on what "overdue" means regardless of the device's clock or time zone. */
-export function renewalStatus(doc: DocumentView, today: string): RenewalStatus {
-  const due = nextDue(doc);
+ *  on what "overdue" means regardless of the device's clock or time zone.
+ *  A document filed in an archive folder has no renewal, whatever it carries. */
+export function renewalStatus(
+  doc: DocumentView,
+  today: string,
+  folder?: Pick<DocFolderView, "code"> | null,
+): RenewalStatus {
+  const due = isArchiveFolder(folder) ? null : nextDue(doc);
   if (!due) return { due: null, days: null, level: "none" };
   const days = dayNumber(due) - dayNumber(today);
   return { due, days, level: days < 0 ? "overdue" : days <= DUE_SOON_DAYS ? "soon" : "ok" };
@@ -207,7 +226,8 @@ export function searchDocuments(
   }
 
   // Soonest renewal first; documents that never renew go after all that do.
-  const due = new Map(hits.map((h) => [h.doc.id, nextDue(h.doc)]));
+  // Archived copies don't renew, so they sort with the documents that never do.
+  const due = new Map(hits.map((h) => [h.doc.id, isArchiveFolder(h.folder) ? null : nextDue(h.doc)]));
   const byDue = (a: DocumentHit, b: DocumentHit) => {
     const da = due.get(a.doc.id);
     const db = due.get(b.doc.id);

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { folderSchema, idFrom, requireAdminApi } from "@/lib/documentApi";
+import { folderCodeTaken, folderSchema, idFrom, requireAdminApi } from "@/lib/documentApi";
 
 /** Renames, renumbers or relocates a folder. */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -13,6 +13,9 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const p = folderSchema.safeParse(await req.json().catch(() => null));
   if (!p.success) {
     return NextResponse.json({ error: p.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
+  }
+  if (await folderCodeTaken(p.data.code, id)) {
+    return NextResponse.json({ error: `There is already a folder ${p.data.code}.` }, { status: 409 });
   }
   try {
     await prisma.docFolder.update({

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { parseDocument, requireAdminApi } from "@/lib/documentApi";
+import { parseDocument, requireAdminApi, withArchiveRule } from "@/lib/documentApi";
 
 /** Files a document in the index: its name, folder, tags and scan link. */
 export async function POST(req: Request) {
@@ -10,8 +10,10 @@ export async function POST(req: Request) {
 
   const p = parseDocument(await req.json().catch(() => null));
   if (!p.ok) return NextResponse.json({ error: p.error }, { status: 400 });
+  const data = await withArchiveRule(p.data);
+  if (!data) return NextResponse.json({ error: "Pick a folder" }, { status: 400 });
   try {
-    const d = await prisma.document.create({ data: { ...p.data, createdById: user.uid } });
+    const d = await prisma.document.create({ data: { ...data, createdById: user.uid } });
     return NextResponse.json({ ok: true, id: d.id });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {

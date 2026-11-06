@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { idFrom, parseDocument, requireAdminApi } from "@/lib/documentApi";
+import { idFrom, parseDocument, requireAdminApi, withArchiveRule } from "@/lib/documentApi";
 
 /** Edits a document — including moving it to another folder. */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -12,8 +12,11 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 
   const p = parseDocument(await req.json().catch(() => null));
   if (!p.ok) return NextResponse.json({ error: p.error }, { status: 400 });
+  // Moving a document into a Z folder archives it, which ends its renewals.
+  const data = await withArchiveRule(p.data);
+  if (!data) return NextResponse.json({ error: "Pick a folder" }, { status: 400 });
   try {
-    await prisma.document.update({ where: { id }, data: p.data });
+    await prisma.document.update({ where: { id }, data });
     return NextResponse.json({ ok: true });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError) {

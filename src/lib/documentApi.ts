@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSessionUser, type SessionUser } from "@/lib/auth";
-import { checkDriveUrl, normaliseTags } from "@/lib/documents";
+import { prisma } from "@/lib/db";
+import { checkDriveUrl, isArchiveFolder, normaliseTags } from "@/lib/documents";
 import { istToday } from "@/lib/format";
 
 /** The document index is the owner's alone — staff and the accountant get 403. */
@@ -91,6 +92,29 @@ export function parseDocument(body: unknown):
       ...renewal,
     },
   };
+}
+
+/**
+ * Filing a document into an archive folder (a Z code) drops its renewal rule:
+ * an archived copy is superseded and must never come up as overdue. Returns
+ * null when the folder doesn't exist.
+ */
+export async function withArchiveRule<T extends Renewal & { folderId: number }>(data: T): Promise<T | null> {
+  const folder = await prisma.docFolder.findUnique({ where: { id: data.folderId }, select: { code: true } });
+  if (!folder) return null;
+  return isArchiveFolder(folder)
+    ? { ...data, renewEveryMonths: null, lastRenewedOn: null, renewalDueOn: null }
+    : data;
+}
+
+/** True when another folder already uses this code, ignoring case — "z-1" and
+ *  "Z-1" would be the same label on two spines. */
+export async function folderCodeTaken(code: string, exceptId?: number): Promise<boolean> {
+  const clash = await prisma.docFolder.findFirst({
+    where: { code: { equals: code.trim(), mode: "insensitive" }, ...(exceptId ? { NOT: { id: exceptId } } : {}) },
+    select: { id: true },
+  });
+  return clash !== null;
 }
 
 export const idFrom = async (ctx: { params: Promise<{ id: string }> }) => {

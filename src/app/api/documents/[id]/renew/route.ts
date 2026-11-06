@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { istToday, isoDate } from "@/lib/format";
 import { idFrom, requireAdminApi, RENEWED_IN_FUTURE } from "@/lib/documentApi";
-import { nextDue } from "@/lib/documents";
+import { isArchiveFolder, nextDue } from "@/lib/documents";
 
 const iso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const bodySchema = z.object({
@@ -33,9 +33,17 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   const doc = await prisma.document.findUnique({
     where: { id },
-    select: { renewEveryMonths: true, lastRenewedOn: true, renewalDueOn: true },
+    select: { renewEveryMonths: true, lastRenewedOn: true, renewalDueOn: true, folder: { select: { code: true } } },
   });
   if (!doc) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  // Checked on the folder as it is now: a folder renamed to Z-something
+  // archives what it holds without touching each document.
+  if (isArchiveFolder(doc.folder)) {
+    return NextResponse.json(
+      { error: `Folder ${doc.folder.code} is an archive — documents there don't renew.` },
+      { status: 400 },
+    );
+  }
 
   const renewedOn = body.data.renewedOn ?? istToday();
   if (renewedOn > istToday()) return NextResponse.json({ error: RENEWED_IN_FUTURE }, { status: 400 });

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   DUE_SOON_DAYS,
+  isArchiveFolder,
   periodLabel,
   popularTags,
   renewalStatus,
@@ -70,7 +71,14 @@ export default function DocumentIndex({
   const [dueFilter, setDueFilter] = useState<DueFilter>("");
   const [err, setErr] = useState<string | null>(null);
 
-  const status = useMemo(() => new Map(docs.map((d) => [d.id, renewalStatus(d, today)])), [docs, today]);
+  const folderOf = useMemo(() => new Map(folders.map((f) => [f.id, f])), [folders]);
+  // A document in an archive (Z) folder never renews, whatever it carries.
+  const status = useMemo(
+    () => new Map(docs.map((d) => [d.id, renewalStatus(d, today, folderOf.get(d.folderId))])),
+    [docs, today, folderOf],
+  );
+  const renews = (d: DocumentView) =>
+    !isArchiveFolder(folderOf.get(d.folderId)) && Boolean(d.renewEveryMonths || d.renewalDueOn);
   const overdue = docs.filter((d) => status.get(d.id)?.level === "overdue").length;
   const soon = docs.filter((d) => status.get(d.id)?.level === "soon").length;
 
@@ -193,8 +201,15 @@ export default function DocumentIndex({
           {hits.map(({ doc, folder }) => (
             <li key={doc.id} className="flex flex-wrap items-start gap-3 py-3">
               {/* The answer to "where is it?" — big enough to read across the office. */}
-              <div className="w-20 shrink-0 rounded-lg bg-accent/10 px-2 py-1.5 text-center">
-                <div className="text-[10px] font-medium uppercase tracking-wide text-accent">Folder</div>
+              <div
+                className={
+                  "w-20 shrink-0 rounded-lg px-2 py-1.5 text-center " +
+                  (isArchiveFolder(folder) ? "bg-surface-2 opacity-80" : "bg-accent/10")
+                }
+              >
+                <div className="text-[10px] font-medium uppercase tracking-wide text-accent">
+                  {isArchiveFolder(folder) ? "Archive" : "Folder"}
+                </div>
                 <div className="text-xl font-bold leading-tight text-accent" data-testid="doc-folder-code">
                   {folder?.code ?? "?"}
                 </div>
@@ -225,7 +240,7 @@ export default function DocumentIndex({
                   </div>
                 )}
                 {doc.notes && <div className="mt-1 text-xs text-faint">{doc.notes}</div>}
-                {(doc.renewEveryMonths || doc.renewalDueOn) && (
+                {renews(doc) && (
                   <div className="mt-1 text-xs text-faint">
                     {doc.renewEveryMonths ? periodLabel(doc.renewEveryMonths) : "Set renewal date"}
                     {doc.lastRenewedOn && <> · last renewed {dayLabel(doc.lastRenewedOn)}</>}
@@ -246,7 +261,7 @@ export default function DocumentIndex({
                   <span className="text-xs text-faint">Not scanned yet</span>
                 )}
                 <div className="flex gap-3 text-xs">
-                  {(doc.renewEveryMonths || doc.renewalDueOn) && (
+                  {renews(doc) && (
                     <button
                       type="button"
                       onClick={() => setRenewing(doc)}

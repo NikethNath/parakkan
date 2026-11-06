@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { DocFolderView } from "@/lib/documents";
+import { isArchiveFolder, type DocFolderView } from "@/lib/documents";
 
 type Folder = DocFolderView & { count: number };
 
@@ -109,6 +109,10 @@ export default function FolderManager({ folders }: { folders: Folder[] }) {
         )}
       </div>
       {err && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{err}</p>}
+      <p className="mt-2 text-xs text-muted">
+        Folders whose number starts with <strong>Z</strong> (Z-1, Z-2…) are archives:
+        nothing in them needs renewing.
+      </p>
 
       {folders.length > 0 && (
         <div className="mt-4 overflow-x-auto">
@@ -125,7 +129,14 @@ export default function FolderManager({ folders }: { folders: Folder[] }) {
             <tbody>
               {folders.map((f) => (
                 <tr key={f.id} className="border-t border-border">
-                  <td className="px-2 py-1.5 font-semibold text-foreground">{f.code}</td>
+                  <td className="px-2 py-1.5 font-semibold text-foreground">
+                    {f.code}
+                    {isArchiveFolder(f) && (
+                      <span className="ml-2 rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted">
+                        Archive
+                      </span>
+                    )}
+                  </td>
                   <td className="px-2 py-1.5">{f.name}</td>
                   <td className="px-2 py-1.5 text-muted">{f.location || "—"}</td>
                   <td className="px-2 py-1.5 text-right tabular-nums text-muted">{f.count}</td>

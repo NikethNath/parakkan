@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   addMonths,
+  isArchiveFolder,
   DUE_SOON_DAYS,
   nextDue,
   renewalStatus,
@@ -220,5 +221,43 @@ describe("searchDocuments — renewal order", () => {
     // Title hits ("licence" in the name) beat tag-only hits; within each
     // group the sooner renewal comes first.
     expect(searchDocuments(list, f, "licence").map((h) => h.doc.id)).toEqual([2, 1, 3, 4]);
+  });
+});
+
+describe("archive folders", () => {
+  const today = "2026-11-06";
+  const overdue: DocumentView = {
+    id: 1,
+    title: "PESO licence 2024",
+    folderId: 9,
+    tags: ["peso"],
+    driveUrl: null,
+    notes: null,
+    renewalDueOn: "2025-01-01",
+  };
+
+  it("recognises Z folders in either case, and only those", () => {
+    for (const code of ["Z-1", "z-2", "Z", " z10", "Z-Old"]) expect(isArchiveFolder({ code })).toBe(true);
+    for (const code of ["L-1", "12", "A-Z", "BZ-1"]) expect(isArchiveFolder({ code })).toBe(false);
+    expect(isArchiveFolder(undefined)).toBe(false);
+  });
+
+  it("gives an archived document no renewal, even with dates on it", () => {
+    expect(renewalStatus(overdue, today, { code: "Z-1" })).toEqual({ due: null, days: null, level: "none" });
+    // The same document anywhere else is overdue.
+    expect(renewalStatus(overdue, today, { code: "L-1" }).level).toBe("overdue");
+  });
+
+  it("sorts archived documents with the ones that never renew", () => {
+    const fs: DocFolderView[] = [
+      { id: 1, code: "L-1", name: "Licences", location: null },
+      { id: 9, code: "Z-1", name: "Archive", location: null },
+    ];
+    const list: DocumentView[] = [
+      overdue,
+      { ...overdue, id: 2, title: "PESO licence 2026", folderId: 1, renewalDueOn: "2027-01-01" },
+    ];
+    // Without the archive rule the 2024 copy (due 2025) would come first.
+    expect(searchDocuments(list, fs, "").map((h) => h.doc.id)).toEqual([2, 1]);
   });
 });

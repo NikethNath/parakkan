@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { folderSchema, requireAdminApi } from "@/lib/documentApi";
+import { folderCodeTaken, folderSchema, requireAdminApi } from "@/lib/documentApi";
 
 /** Adds a physical folder to the document index. */
 export async function POST(req: Request) {
@@ -11,6 +11,9 @@ export async function POST(req: Request) {
   const p = folderSchema.safeParse(await req.json().catch(() => null));
   if (!p.success) {
     return NextResponse.json({ error: p.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
+  }
+  if (await folderCodeTaken(p.data.code)) {
+    return NextResponse.json({ error: `There is already a folder ${p.data.code}.` }, { status: 409 });
   }
   try {
     const f = await prisma.docFolder.create({
