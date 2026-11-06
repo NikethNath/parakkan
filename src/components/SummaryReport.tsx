@@ -1,12 +1,16 @@
 import { inr, istToday, dayLabel } from "@/lib/format";
 import { buildSummary, emptySummaryRow, SUMMARY_COLS, type Summary } from "@/lib/summary";
 import OverheadsPanel from "@/components/OverheadsPanel";
+import TestLitresEditButton from "@/components/TestLitresEditButton";
 import PrintButton from "@/components/PrintButton";
 import AutoSubmitDate from "@/components/AutoSubmitDate";
 
 // The per-day summary table with period totals. Shared by the admin Summary
-// tab and the accountant's read-only /accounts page (it only reads data, so
-// it's safe for both).
+// tab and the accountant's read-only /accounts page.
+//
+// `canEdit` adds the per-day pump-test editor and is passed only by the admin
+// page — the accountant's view stays read-only, so the switch is an explicit
+// prop rather than anything this component infers.
 
 const isDate = (s?: string) => /^\d{4}-\d{2}-\d{2}$/.test(s ?? "");
 const L = (n: number) =>
@@ -21,9 +25,11 @@ const fmt = (n: number, kind: "L" | "money" | "rate") => {
 export default async function SummaryReport({
   from,
   to,
+  canEdit = false,
 }: {
   from?: string;
   to?: string;
+  canEdit?: boolean;
 }) {
   const today = istToday();
   const hasRange = isDate(from) && isDate(to);
@@ -104,10 +110,11 @@ export default async function SummaryReport({
                         {c.label}
                       </th>
                     ))}
+                    {canEdit && <th className="px-2 py-1.5 font-medium print:hidden" />}
                   </tr>
                 </thead>
                 <tbody>
-                  {days.map(({ date, row }) => (
+                  {days.map(({ date, row, sheets }) => (
                     <tr key={date} className="border-t border-border">
                       <td className="px-2 py-1.5 font-medium text-foreground">{dayLabel(date)}</td>
                       {SUMMARY_COLS.map((c) => (
@@ -115,6 +122,15 @@ export default async function SummaryReport({
                           {fmt(c.value(row), c.kind)}
                         </td>
                       ))}
+                      {canEdit && (
+                        <td className="px-2 py-1.5 print:hidden">
+                          <TestLitresEditButton
+                            date={date}
+                            label={dayLabel(date)}
+                            sheets={sheets}
+                          />
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -126,6 +142,7 @@ export default async function SummaryReport({
                         {fmt(c.value(totals), c.kind)}
                       </td>
                     ))}
+                    {canEdit && <td className="print:hidden" />}
                   </tr>
                 </tfoot>
               </table>
@@ -134,6 +151,7 @@ export default async function SummaryReport({
           <p className="mt-2 text-xs text-faint print:hidden">
             Rates are what was actually realised (value ÷ saleable litres), so the total
             row averages by value if the pump rate changed inside the period.
+            {canEdit && " Edit corrects a day's pump-test litres on the sheet that holds them."}
           </p>
         </section>
       )}

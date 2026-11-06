@@ -105,8 +105,20 @@ export interface OverheadItem {
   amount: number;
 }
 
+/** One filed sheet behind a day's figures, with what the test-litres editor
+ *  needs: who to show it as, and the cap the calc will enforce. */
+export interface DaySheet {
+  id: number;
+  shift: "MORNING" | "EVENING";
+  product: "MS" | "HSD";
+  by: string;
+  testLitres: number;
+  /** Litres this sheet dispensed — test litres cannot exceed it. */
+  grossLitres: number;
+}
+
 export interface Summary {
-  days: { date: string; row: SummaryRow }[];
+  days: { date: string; row: SummaryRow; sheets: DaySheet[] }[];
   totals: SummaryRow;
   overheads: OverheadItem[];
 }
@@ -119,12 +131,17 @@ export async function buildSummary(from: string, to: string): Promise<Summary> {
   const [entries, txns, overheads] = await Promise.all([
     prisma.dailyEntry.findMany({
       where: { businessDate: { gte: start, lt: endExclusive } },
+      orderBy: [{ businessDate: "asc" }, { shift: "asc" }, { product: "asc" }, { id: "asc" }],
       select: {
+        id: true,
+        shift: true,
         businessDate: true,
         product: true,
         netSalableLitres: true,
+        grossLitres: true,
         fuelExpected: true,
         testLitres: true,
+        employee: { select: { name: true } },
         creditTotal: true,
         expensesTotal: true,
         salaryTotal: true,
@@ -158,9 +175,23 @@ export async function buildSummary(from: string, to: string): Promise<Summary> {
     map.set(k, r);
     return r;
   };
+  // The sheets behind each day, so the Summary tab can correct a test-litres
+  // figure on the sheet that actually holds it.
+  const sheets = new Map<string, DaySheet[]>();
 
   for (const e of entries) {
     const r = dayOf(e.businessDate);
+    const key = isoDate(e.businessDate);
+    const list = sheets.get(key) ?? [];
+    list.push({
+      id: e.id,
+      shift: e.shift,
+      product: e.product,
+      by: e.employee.name,
+      testLitres: toNum(e.testLitres),
+      grossLitres: toNum(e.grossLitres),
+    });
+    sheets.set(key, list);
     const net = toNum(e.netSalableLitres);
     const test = toNum(e.testLitres);
     // fuelExpected is what the till owes for fuel: saleable litres × that
@@ -202,7 +233,7 @@ export async function buildSummary(from: string, to: string): Promise<Summary> {
 
   const days = [...map.entries()]
     .sort((a, b) => (a[0] < b[0] ? -1 : 1)) // oldest first
-    .map(([date, row]) => ({ date, row }));
+    .map(([date, row]) => ({ date, row, sheets: sheets.get(date) ?? [] }));
 
   const totals = emptySummaryRow();
   for (const { row } of days) for (const k of SUMMARY_KEYS) totals[k] += row[k];

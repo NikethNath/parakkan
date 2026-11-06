@@ -120,21 +120,6 @@ export default function ReconcileImport() {
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted">
         Import money received
       </h2>
-      <p className="mb-3 text-xs text-muted">
-        Pick the <strong>Paytm for Business transaction report</strong> (.csv), an{" "}
-        <strong>SBI statement export</strong> (.xls), or both together — each file is
-        recognised by what&apos;s in it, so the order and the mix don&apos;t matter. The
-        report splits a day into GPay (UPI and its variants) and POS (card); the statement
-        supplies PhonePe money from the old QR, which Paytm never sees. A day&apos;s GPay is{" "}
-        <strong>both added together</strong>.
-      </p>
-      <p className="mb-3 text-xs text-muted">
-        A long Paytm export arrives split into numbered parts (<code>…_001.csv</code>,{" "}
-        <code>…_002.csv</code>): <strong>pick all the parts together</strong>, since a day
-        straddling two of them is only right when they are added in one go. Repeated
-        payments are counted once, and re-importing is safe. The Paytm file is read and
-        discarded — nothing is kept but the two totals for each day.
-      </p>
       <div className="flex flex-wrap items-center gap-3">
         <input
           type="file"

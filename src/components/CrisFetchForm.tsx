@@ -13,12 +13,10 @@ export default function CrisFetchForm({
   configured,
   defaultFrom,
   defaultTo,
-  hint,
 }: {
   configured: boolean;
   defaultFrom?: string;
   defaultTo?: string;
-  hint?: string;
 }) {
   const router = useRouter();
   const today = new Date();
@@ -101,12 +99,6 @@ export default function CrisFetchForm({
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted">
         Fetch from CRIS (auto)
       </h2>
-      <p className="mb-3 text-xs text-muted">
-        Logs into CRIS, downloads the Daily Sales Report for the range, and imports it.
-        Run this when you&apos;re <strong>not</strong> logged into CRIS yourself
-        (single-session). It logs out automatically when done.
-      </p>
-      {hint && <p className="mb-3 text-xs text-accent">{hint}</p>}
       <div className="flex flex-wrap items-end gap-3">
         <label className="text-sm">
           <span className="mb-1 block font-medium text-foreground">From</span>

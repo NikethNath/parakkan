@@ -15,7 +15,9 @@ export interface CrisRow {
   netTotalizerLitres: number;
   testLitres: number;
   totalizerLitres: number;
-  // Tank stock columns (litres) — drive the DSR "Daily sales" register.
+  // Tank stock columns (litres), kept as CRIS reports them. The DSR "Daily
+  // sales" register that read them was removed; they are still cached because
+  // they are part of the official day and cost nothing to keep.
   // Undefined when the sheet predates these columns / lacks the headers.
   openingStock?: number;
   receiptQty?: number;

@@ -6,5 +6,6 @@ export default async function SummaryPage({
   searchParams: Promise<{ from?: string; to?: string }>;
 }) {
   const sp = await searchParams;
-  return <SummaryReport from={sp.from} to={sp.to} />;
+  // The owner can correct a day's pump-test litres here; /accounts cannot.
+  return <SummaryReport from={sp.from} to={sp.to} canEdit />;
 }

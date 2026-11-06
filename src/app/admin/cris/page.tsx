@@ -51,13 +51,6 @@ export default async function CrisPage({
 
   const fetchFrom = crisMax ? isoDate(crisMax) : oldest; // last cached day, inclusive
   const newest = todayIso;
-  const crisMaxLabel = crisMax
-    ? crisMax.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })
-    : null;
-  const gapHint = crisMax
-    ? `Re-fetches from your last cached day (${crisMaxLabel}) through today — so an incomplete last day gets refreshed, plus any newer days.`
-    : "Pre-filled to your full data range (no CRIS data cached yet).";
-
   const build = (product: "MS" | "HSD"): Row[] => {
     const map = new Map<string, Row>();
     for (const c of crisRows.filter((r) => r.product === product)) {
@@ -84,12 +77,7 @@ export default async function CrisPage({
 
   return (
     <>
-      <CrisFetchForm
-        configured={configured}
-        defaultFrom={fetchFrom}
-        defaultTo={newest}
-        hint={gapHint}
-      />
+      <CrisFetchForm configured={configured} defaultFrom={fetchFrom} defaultTo={newest} />
       <CrisReportUpload />
 
       <section className="rounded-xl bg-surface p-4 shadow-soft ring-1 ring-border">

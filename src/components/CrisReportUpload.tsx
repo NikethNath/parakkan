@@ -38,11 +38,6 @@ export default function CrisReportUpload() {
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted">
         Upload CRIS Daily Sales Report
       </h2>
-      <p className="mb-3 text-xs text-muted">
-        Download the Daily Sales Report (.xlsx) from CRIS for a date range and upload
-        it here. The <strong>Net Totalizer Sales</strong> per product/date is matched
-        against what staff entered.
-      </p>
       <div className="flex flex-wrap items-center gap-3">
         <input
           type="file"
