@@ -75,6 +75,13 @@ against the oil company's official records and the bank statement, and audited.
 - Day-book style reports: monthly summary, per-employee short/excess, credit
   ledger, expense ledger, oil sales — plus dealer utilities (tank dip → litres
   chart, ASTM 3B density correction).
+- **Paper document index** (admin-only) — type a document's name or a tag
+  ("peso", "fire noc", "kseb") and get the physical folder it is filed in and
+  where that folder sits, plus a one-click link to its scan in Google Drive.
+  Only the link is stored; the scans stay in Drive. Each document can renew on
+  a set date or every N months from its last renewal; the list puts the soonest
+  renewal first, flags what is overdue or due within 30 days, and a "Renewed"
+  button rolls the date forward.
 - Staff management with activate/deactivate (temporary-staff churn is normal at
   outlets) — past records are always preserved.
 
@@ -166,7 +173,8 @@ change log). `Attendance` is auto-synced from sheets. `CrisDaily` /
 `CrisPumpDaily` store the portal's official figures; `BankUpload` / `BankTxn`
 store parsed statement rows and their matches. `OutletExpense` /
 `OutletExpenseCategory` stand apart from all of that — the outlet's own running
-costs, attached to no sheet and to no till. Full schema:
+costs, attached to no sheet and to no till. `DocFolder` / `Document` index the
+paper files on site. Full schema:
 [prisma/schema.prisma](prisma/schema.prisma).
 
 ## Running locally

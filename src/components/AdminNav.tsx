@@ -35,6 +35,7 @@ const items: Item[] = [
       { href: "/admin/attendance/edit", label: "Edit" },
     ],
   },
+  { href: "/admin/documents", label: "Documents" },
   { href: "/admin/staff", label: "Staff" },
 ];
 

@@ -75,6 +75,7 @@ model User {
   salaryPayments   SalaryPayment[] @relation("EmployeeSalaryPayments")
   recordedPayments SalaryPayment[] @relation("RecordedSalaryPayments")
   outletExpenses   OutletExpense[] @relation("RecordedOutletExpenses")
+  documents        Document[]      @relation("CreatedDocuments")
 }
 
 model DailyEntry {
@@ -384,4 +385,56 @@ model CrisCredential {
   encUsername String
   encPassword String
   updatedAt   DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Paper document index. The outlet's licences, certificates, agreements and
+// bills sit in physical folders on site; this records which folder each one is
+// in, so finding it means typing its name or a tag instead of opening every
+// binder. Admin-only. The scans themselves live in Google Drive — only the link
+// is stored here, never the file.
+// ---------------------------------------------------------------------------
+
+// A physical folder / binder. `code` is whatever is written on its spine
+// ("12", "A-3"), so it is free text rather than a number.
+model DocFolder {
+  id        Int        @id @default(autoincrement())
+  code      String     @unique
+  name      String
+  // Where the folder physically sits — "Office cabinet, shelf 2".
+  location  String?
+  createdAt DateTime   @default(now())
+  documents Document[]
+}
+
+model Document {
+  id       Int       @id @default(autoincrement())
+  title    String
+  // Restrict: a folder that still holds documents can't be deleted out from
+  // under them — move them first.
+  folder   DocFolder @relation(fields: [folderId], references: [id], onDelete: Restrict)
+  folderId Int
+  // Stored lower-case, trimmed and de-duplicated (src/lib/documents.ts), so a
+  // search never misses "Licence" because it was typed "licence".
+  tags     String[]  @default([])
+  // Link to the scanned copy in Google Drive. Optional: the paper is worth
+  // indexing before it has been scanned.
+  driveUrl String?
+  notes    String?
+
+  // Renewal. A document either doesn't renew, renews on a fixed date printed
+  // on it (`renewalDueOn`), or renews every N months from when it was last
+  // renewed (`renewEveryMonths` + `lastRenewedOn`). The next due date is
+  // derived, never stored — see nextDue() in src/lib/documents.ts — so
+  // recording a renewal can't leave a stale due date behind.
+  renewEveryMonths Int?
+  lastRenewedOn    DateTime? @db.Date
+  renewalDueOn     DateTime? @db.Date
+
+  createdBy   User?    @relation("CreatedDocuments", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([folderId])
 }
