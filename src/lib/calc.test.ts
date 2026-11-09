@@ -61,6 +61,15 @@ describe("computeEntry", () => {
     expect(shortExcessLabel(r.shortExcess)).toBe("SHORT");
   });
 
+  it("counts HP Pay in the till like GPay and POS", () => {
+    // 800 of the 10,000 GPay was really paid on HP Pay — same total, same result.
+    const r = computeEntry({ ...base, gpay: 9200, hppay: 800 });
+    expect(r.collected).toBe(77000);
+    expect(r.shortExcess).toBe(200);
+    // HP Pay left off the sheet shows as a short of exactly that much.
+    expect(computeEntry({ ...base, gpay: 9200 }).shortExcess).toBe(-600);
+  });
+
   it("subtracts oil from the fuel reconciliation", () => {
     const withOil = computeEntry(base).shortExcess;
     const withoutOil = computeEntry({ ...base, oilLines: [] }).shortExcess;

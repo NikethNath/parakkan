@@ -74,6 +74,7 @@ export default async function AdminEntryDetail({
       coins: s(entry.coins),
       gpay: s(entry.gpay),
       pos: s(entry.pos),
+      hppay: s(entry.hppay),
     },
     oil: entry.oilLines.map((l) => ({
       name: l.name,

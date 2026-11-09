@@ -55,6 +55,7 @@ export default async function EmployeeEditSheet({
       coins: s(entry.coins),
       gpay: s(entry.gpay),
       pos: s(entry.pos),
+      hppay: s(entry.hppay),
     },
     oil: entry.oilLines.map((l) => ({ name: l.name, amount: s(l.amount) })),
     expenses: entry.expenseLines.map((l) => ({ description: l.description, amount: s(l.amount) })),

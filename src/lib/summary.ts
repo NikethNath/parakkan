@@ -33,6 +33,8 @@ export interface SummaryRow {
   gpayStaff: number;
   posStmt: number;
   posStaff: number;
+  /** HP Pay as the staff entered it — there's no statement to match it against. */
+  hppayStaff: number;
   /** Outlet overheads booked to this day — electricity, taxes, licence fees.
    *  Nothing to do with the till, so no sheet's short/excess moves with it. */
   overhead: number;
@@ -54,6 +56,7 @@ export const SUMMARY_KEYS = [
   "gpayStaff",
   "posStmt",
   "posStaff",
+  "hppayStaff",
   "overhead",
 ] as const;
 
@@ -89,6 +92,7 @@ export const SUMMARY_COLS: SummaryCol[] = [
   { label: "GPay (staff)", kind: "money", value: (r) => r.gpayStaff },
   { label: "POS (received)", kind: "money", value: (r) => r.posStmt },
   { label: "POS (staff)", kind: "money", value: (r) => r.posStaff },
+  { label: "HP Pay (staff)", kind: "money", value: (r) => r.hppayStaff },
   { label: "Overheads", kind: "money", value: (r) => r.overhead },
 ];
 
@@ -149,6 +153,7 @@ export async function buildSummary(from: string, to: string): Promise<Summary> {
         cashTotal: true,
         gpay: true,
         pos: true,
+        hppay: true,
       },
     }),
     prisma.bankTxn.findMany({
@@ -214,6 +219,7 @@ export async function buildSummary(from: string, to: string): Promise<Summary> {
     r.cash += toNum(e.cashTotal);
     r.gpayStaff += toNum(e.gpay);
     r.posStaff += toNum(e.pos);
+    r.hppayStaff += toNum(e.hppay);
   }
   // Figures for a day add up across providers, minus the Paytm bank credit on
   // days the Paytm report covers — the same rule the reconcile table uses, so

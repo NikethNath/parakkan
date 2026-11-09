@@ -152,6 +152,7 @@ export default async function EmployeeSheetDetail({
             <Row label="Cash counted">{inr(toNum(entry.cashTotal))}</Row>
             <Row label="GPay">{inr(toNum(entry.gpay))}</Row>
             <Row label="POS">{inr(toNum(entry.pos))}</Row>
+            {toNum(entry.hppay) > 0 && <Row label="HP Pay">{inr(toNum(entry.hppay))}</Row>}
             {entry.oilLines.length > 0 && (
               <Row label="Oil total">{inr(toNum(entry.oilTotal))}</Row>
             )}
@@ -218,6 +219,7 @@ const FIELD_LABELS: Record<string, string> = {
   creditTotal: "Credit total",
   gpay: "GPay",
   pos: "POS",
+  hppay: "HP Pay",
   rate: "Rate",
   testLitres: "Test litres",
 };

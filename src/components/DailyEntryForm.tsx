@@ -38,6 +38,7 @@ type FormState = {
   coins: string;
   gpay: string;
   pos: string;
+  hppay: string;
 };
 
 const emptyForm = (): FormState => {
@@ -69,6 +70,7 @@ const emptyForm = (): FormState => {
   coins: "",
   gpay: "",
   pos: "",
+  hppay: "",
   };
 };
 
@@ -535,7 +537,7 @@ export default function DailyEntryForm({
 
       {/* Digital */}
       <Section title="Digital collections">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <Field label="GPay / UPI (₹)">
             <input
               type="number"
@@ -554,6 +556,17 @@ export default function DailyEntryForm({
               step="0.01"
               value={form.pos}
               onChange={(e) => set("pos", e.target.value)}
+              className={inputCls}
+              placeholder="0.00"
+            />
+          </Field>
+          <Field label="HP Pay (₹)">
+            <input
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              value={form.hppay}
+              onChange={(e) => set("hppay", e.target.value)}
               className={inputCls}
               placeholder="0.00"
             />

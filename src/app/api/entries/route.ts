@@ -93,6 +93,7 @@ export async function POST(req: Request) {
 
           gpay: input.gpay,
           pos: input.pos,
+          hppay: input.hppay,
 
           cashTotal: c.cashTotal,
           oilTotal: c.oilTotal,

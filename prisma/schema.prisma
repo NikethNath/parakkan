@@ -64,18 +64,19 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  entries          DailyEntry[]    @relation("EmployeeEntries")
-  partnerEntries   DailyEntry[]    @relation("PartnerEntries")
-  enteredEntries   DailyEntry[]    @relation("EnteredEntries")
-  verifiedEntries  DailyEntry[]    @relation("VerifiedBy")
+  entries          DailyEntry[]      @relation("EmployeeEntries")
+  partnerEntries   DailyEntry[]      @relation("PartnerEntries")
+  enteredEntries   DailyEntry[]      @relation("EnteredEntries")
+  verifiedEntries  DailyEntry[]      @relation("VerifiedBy")
   attendance       Attendance[]
   audits           EntryAudit[]
   uploads          BankUpload[]
-  bankTxns         BankTxn[]       @relation("EnteredBankTxns")
-  salaryPayments   SalaryPayment[] @relation("EmployeeSalaryPayments")
-  recordedPayments SalaryPayment[] @relation("RecordedSalaryPayments")
-  outletExpenses   OutletExpense[] @relation("RecordedOutletExpenses")
-  documents        Document[]      @relation("CreatedDocuments")
+  bankTxns         BankTxn[]         @relation("EnteredBankTxns")
+  salaryPayments   SalaryPayment[]   @relation("EmployeeSalaryPayments")
+  recordedPayments SalaryPayment[]   @relation("RecordedSalaryPayments")
+  outletExpenses   OutletExpense[]   @relation("RecordedOutletExpenses")
+  documents        Document[]        @relation("CreatedDocuments")
+  maintenanceTests MaintenanceTest[] @relation("RecordedMaintenanceTests")
 }
 
 model DailyEntry {
@@ -117,6 +118,9 @@ model DailyEntry {
   // raw inputs — digital collections
   gpay Decimal @default(0) @db.Decimal(12, 2)
   pos  Decimal @default(0) @db.Decimal(12, 2)
+  // HP Pay — HPCL's own payment app. Kept apart from GPay/POS because it
+  // settles through HPCL, not the bank's UPI/card channels.
+  hppay Decimal @default(0) @db.Decimal(12, 2)
 
   // computed snapshots (server-authoritative)
   cashTotal        Decimal @default(0) @db.Decimal(12, 2)
@@ -319,6 +323,29 @@ model CrisDaily {
   closingStock       Decimal? @db.Decimal(14, 3)
   raw                Json?
   fetchedAt          DateTime @default(now())
+
+  @@unique([businessDate, product])
+}
+
+// Fuel a repairman pumped through a dispenser while testing it during
+// maintenance, without authorising the test from the automation computer. CRIS
+// only subtracts *authorised* tests, so it counts these litres as sales and its
+// net sale comes out higher than what was really sold.
+//
+// Kept apart from CrisDaily on purpose: every CRIS fetch (including the daily
+// cron) upserts that row from the portal, which would wipe a correction stored
+// there. CRIS's own figures stay exactly as CRIS reports them; this explains
+// the difference next to them. One figure per day and product — several jobs
+// on one day are added together and described in the note.
+model MaintenanceTest {
+  id           Int      @id @default(autoincrement())
+  businessDate DateTime @db.Date
+  product      Product
+  litres       Decimal  @db.Decimal(12, 3)
+  note         String?
+  recordedBy   User?    @relation("RecordedMaintenanceTests", fields: [recordedById], references: [id], onDelete: SetNull)
+  recordedById Int?
+  updatedAt    DateTime @updatedAt
 
   @@unique([businessDate, product])
 }

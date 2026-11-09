@@ -32,7 +32,9 @@ against the oil company's official records and the bank statement, and audited.
 
 - A digital shift sheet that mirrors the old paper layout — nozzle opening/closing
   totalizer readings, test litres, a currency-note denomination counter, GPay,
-  card (POS), credit (khata) customers, 2T oil sales, and shift expenses.
+  card (POS), HP Pay, credit (khata) customers, 2T oil sales, and shift expenses.
+  HP Pay counts toward the till like GPay and POS and has its own column on the
+  Summary; there's no bank statement to match it against, so it isn't reconciled.
 - Live math as they type: gross/net litres, expected amount at today's rate, and
   the **short / excess** figure — before they hit submit.
 - A partner option when two attendants share a dispensing unit: the short/excess
@@ -51,6 +53,10 @@ against the oil company's official records and the bank statement, and audited.
   sale litres against what staff entered. Disagreements are flagged to 0.1 L,
   and a flagged meter reading gets a one-click **"Fix → CRIS"** button that
   replaces it with the official value, recomputes the sheet, and logs the change.
+  When a repairman tests a dispenser by pumping fuel through it without
+  authorising the test on the computer, CRIS books those litres as sold; the
+  day's **maintenance test** is recorded next to CRIS's figure (never written
+  into it, so a re-fetch can't wipe it) and taken off before comparing.
 - **Money-received reconciliation** — one import takes the Paytm for Business
   transaction report, the bank's statement export, or both at once (each file is
   recognised by its contents). The report splits a day into GPay and POS; the

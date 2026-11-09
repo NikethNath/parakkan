@@ -39,6 +39,7 @@ const INPUT_FIELDS = [
   "coins",
   "gpay",
   "pos",
+  "hppay",
 ] as const;
 
 export async function DELETE(
@@ -274,6 +275,7 @@ export async function PATCH(
           coins: input.coins,
           gpay: input.gpay,
           pos: input.pos,
+          hppay: input.hppay,
           cashTotal: c.cashTotal,
           oilTotal: c.oilTotal,
           expensesTotal: c.expensesTotal,

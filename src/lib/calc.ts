@@ -8,7 +8,7 @@ import { z } from "zod";
  * are never trusted). Keep it pure: no I/O, no Decimal, just numbers in/out.
  *
  * Core formula (confirmed with the dealer):
- *   shortExcess = cashTotal + gpay + pos + expensesTotal + salaryTotal
+ *   shortExcess = cashTotal + gpay + pos + hppay + expensesTotal + salaryTotal
  *                 + creditTotal - oilTotal - fuelExpected
  *   fuelExpected = (gross dispensed - test litres) * rate
  *   > 0  => EXCESS (added to the employee's salary at month end)
@@ -91,6 +91,7 @@ export const entryInputSchema = z
 
     gpay: money.default(0),
     pos: money.default(0),
+    hppay: money.default(0),
 
     oilLines: z.array(oilLineSchema).default([]),
     expenseLines: z.array(expenseLineSchema).default([]),
@@ -158,6 +159,8 @@ export interface EntryInput {
   coins: number;
   gpay: number;
   pos: number;
+  /** HPCL's own HP Pay app/wallet — paid to the outlet, so it's in the till. */
+  hppay: number;
   oilLines: OilLine[];
   expenseLines: ExpenseLine[];
   salaryLines: SalaryLine[];
@@ -196,7 +199,7 @@ export interface EntryComputed {
   expensesTotal: number;
   salaryTotal: number;
   creditTotal: number;
-  /** cash + gpay + pos (the money physically/digitally in hand) */
+  /** cash + gpay + pos + hppay (the money physically/digitally in hand) */
   collected: number;
   /** > 0 excess, < 0 short, 0 balanced */
   shortExcess: number;
@@ -263,12 +266,14 @@ export function computeEntry(input: RawEntryInput): EntryComputed {
 
   const gpay = num(input.gpay);
   const pos = num(input.pos);
-  const collected = round2(cashTotal + gpay + pos);
+  const hppay = num(input.hppay);
+  const collected = round2(cashTotal + gpay + pos + hppay);
 
   const shortExcess = round2(
     cashTotal +
       gpay +
       pos +
+      hppay +
       expensesTotal +
       salaryTotal +
       creditTotal -

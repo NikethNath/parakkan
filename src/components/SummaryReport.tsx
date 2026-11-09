@@ -150,7 +150,8 @@ export default async function SummaryReport({
           )}
           <p className="mt-2 text-xs text-faint print:hidden">
             Rates are what was actually realised (value ÷ saleable litres), so the total
-            row averages by value if the pump rate changed inside the period.
+            row averages by value if the pump rate changed inside the period. Test litres
+            are what the staff wrote on their sheets — CRIS&apos;s test figure isn&apos;t used here.
             {canEdit && " Edit corrects a day's pump-test litres on the sheet that holds them."}
           </p>
         </section>

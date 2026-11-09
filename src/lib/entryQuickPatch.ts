@@ -90,6 +90,7 @@ export async function applyQuickPatch(
     coins: toNum(existing.coins),
     gpay: toNum(existing.gpay),
     pos: toNum(existing.pos),
+    hppay: toNum(existing.hppay),
     oilLines: existing.oilLines.map((l) => ({ name: l.name, amount: toNum(l.amount) })),
     expenseLines: existing.expenseLines.map((l) => ({
       description: l.description,

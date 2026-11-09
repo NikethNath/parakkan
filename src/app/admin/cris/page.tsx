@@ -5,15 +5,13 @@ import CrisReportUpload from "@/components/CrisReportUpload";
 import CrisFetchForm from "@/components/CrisFetchForm";
 import CrisCompare from "@/components/CrisCompare";
 import AutoSubmitDate from "@/components/AutoSubmitDate";
+import { CRIS_TOLERANCE, type CrisCompareRow } from "@/lib/crisCompare";
 
 function monthBounds(month: string) {
   const [y, m] = month.split("-").map(Number);
   return { start: new Date(Date.UTC(y, m - 1, 1)), end: new Date(Date.UTC(y, m, 1)) };
 }
-const TOL = 0.15; // litres tolerance
 const fmtL = (n: number) => `${n.toFixed(2)} L`;
-
-type Row = { date: string; cris: number | null; staff: number };
 
 export default async function CrisPage({
   searchParams,
@@ -26,7 +24,7 @@ export default async function CrisPage({
 
   const { configured } = await crisStatus();
 
-  const [crisRows, entries, crisAgg, bankAgg, entryAgg] = await Promise.all([
+  const [crisRows, entries, crisAgg, bankAgg, entryAgg, maintenance] = await Promise.all([
     prisma.crisDaily.findMany({ where: { businessDate: { gte: start, lt: end } } }),
     prisma.dailyEntry.findMany({
       where: { businessDate: { gte: start, lt: end } },
@@ -38,6 +36,11 @@ export default async function CrisPage({
     }),
     prisma.bankTxn.aggregate({ _max: { businessDate: true }, _min: { businessDate: true } }),
     prisma.dailyEntry.aggregate({ _max: { businessDate: true }, _min: { businessDate: true } }),
+    // Repairmen's unauthorised tests, which CRIS counted as sales.
+    prisma.maintenanceTest.findMany({
+      where: { businessDate: { gte: start, lt: end } },
+      select: { businessDate: true, product: true, litres: true, note: true },
+    }),
   ]);
 
   // Pre-fill the CRIS fetch range to RE-FETCH the last cached day (it may have
@@ -51,16 +54,30 @@ export default async function CrisPage({
 
   const fetchFrom = crisMax ? isoDate(crisMax) : oldest; // last cached day, inclusive
   const newest = todayIso;
-  const build = (product: "MS" | "HSD"): Row[] => {
-    const map = new Map<string, Row>();
+  const build = (product: "MS" | "HSD"): CrisCompareRow[] => {
+    const map = new Map<string, CrisCompareRow>();
+    const blank = (date: string): CrisCompareRow => ({
+      date,
+      cris: null,
+      maintenance: 0,
+      maintenanceNote: null,
+      staff: 0,
+    });
     for (const c of crisRows.filter((r) => r.product === product)) {
       const d = isoDate(c.businessDate);
-      map.set(d, { date: d, cris: toNum(c.officialSaleLitres), staff: 0 });
+      map.set(d, { ...blank(d), cris: toNum(c.officialSaleLitres) });
     }
     for (const e of entries.filter((r) => r.product === product)) {
       const d = isoDate(e.businessDate);
-      const cur = map.get(d) ?? { date: d, cris: null, staff: 0 };
+      const cur = map.get(d) ?? blank(d);
       cur.staff += toNum(e.netSalableLitres);
+      map.set(d, cur);
+    }
+    for (const m of maintenance.filter((r) => r.product === product)) {
+      const d = isoDate(m.businessDate);
+      const cur = map.get(d) ?? blank(d);
+      cur.maintenance = toNum(m.litres);
+      cur.maintenanceNote = m.note;
       map.set(d, cur);
     }
     return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
@@ -86,7 +103,8 @@ export default async function CrisPage({
             <h2 className="text-base font-bold text-foreground">CRIS vs staff — {monthLabel}</h2>
             <p className="text-xs text-muted">
               Net Totalizer Sales (CRIS) vs net salable litres entered by staff. Δ = staff −
-              CRIS; off by &gt; {fmtL(TOL)} is flagged.
+              CRIS, after taking off any maintenance test; off by &gt; {fmtL(CRIS_TOLERANCE)} is
+              flagged.
             </p>
             {lastFetched ? (
               <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">
