@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { checkDuDays, placeSheets, type DuNozzle, type DuSheet } from "./duCheck";
+import { checkDuDays, placeSheets as place, type DuNozzle, type DuSheet } from "./duCheck";
+
+/** Placement as DU names, which is what most tests care about. */
+const placeSheets = (n: DuNozzle[], s: DuSheet[]) =>
+  new Map([...place(n, s)].map(([id, v]) => [id, v.map((x) => x?.du ?? null)]));
 
 // Three DUs, each one MS and one HSD nozzle, totalizers far apart.
 const NOZZLES: DuNozzle[] = [
@@ -42,7 +46,7 @@ const run = (sheets: DuSheet[], qr: { date: string; posId: string; amount: numbe
   checkDuDays({
     dus: DUS,
     sheets,
-    placement: placeSheets(NOZZLES, sheets),
+    placement: place(NOZZLES, sheets),
     qr,
     phonepe,
     reportDays: new Set(qr.map((q) => q.date)),
@@ -79,6 +83,17 @@ describe("placeSheets", () => {
   it("matches on the reading that's filled in when the other is blank", () => {
     const s = [sheet("2026-11-02", "MORNING", 1, "MS", 0, 200_400, 0)];
     expect(placeSheets(NOZZLES, s).get(s[0].id)).toEqual(["DU2", null]);
+  });
+
+  it("places two sheets on one nozzle in the same shift, whichever comes first", () => {
+    // 06 Nov: the evening sheet was filed as a second morning sheet.
+    for (const order of [0, 1]) {
+      const a = sheet("2026-11-02", "MORNING", 1, "MS", 100_000, 100_500, 0);
+      const b = sheet("2026-11-02", "MORNING", 2, "MS", 100_500, 101_100, 0);
+      const s = order ? [b, a] : [a, b];
+      const p = placeSheets(NOZZLES, s);
+      expect([p.get(a.id)![0], p.get(b.id)![0]]).toEqual(["DU1", "DU1"]);
+    }
   });
 
   it("leaves a reading near no bound nozzle unplaced", () => {
@@ -158,6 +173,31 @@ describe("checkDuDays", () => {
     expect(days[0].groups[0]).toMatchObject({ dus: ["DU1", "DU2"], paytm: 3500, staffGpay: 3500, status: "ok" });
   });
 
+  it("counts both same-shift sheets on a DU and says one may be the wrong shift", () => {
+    const days = run(
+      [
+        sheet(D, "MORNING", 1, "MS", 100_000, 100_500, 31_444.23),
+        sheet(D, "MORNING", 2, "MS", 100_500, 101_100, 51_085.77),
+      ],
+      [{ date: D, posId: "DU1", amount: 82_529.28 }],
+    );
+    expect(days[0].unplaced).toEqual([]);
+    const g = days[0].groups[0];
+    expect(g).toMatchObject({ staffGpay: 82_530, status: "ok" });
+    expect(g.sameShift).toEqual([{ du: "DU1", shift: "MORNING", names: ["Staff 1", "Staff 2"] }]);
+  });
+
+  it("doesn't call a normal morning/evening pair a same-shift clash", () => {
+    const days = run(
+      [
+        sheet(D, "MORNING", 1, "MS", 100_000, 100_500, 100),
+        sheet(D, "EVENING", 2, "MS", 100_500, 101_000, 100),
+      ],
+      [{ date: D, posId: "DU1", amount: 200 }],
+    );
+    expect(days[0].groups[0].sameShift).toEqual([]);
+  });
+
   it("treats an excess no bigger than the day's PhonePe money as possibly that", () => {
     const days = run(
       [sheet(D, "MORNING", 1, "MS", 100_000, 100_500, 3400)],
@@ -211,7 +251,7 @@ describe("checkDuDays", () => {
     const days = checkDuDays({
       dus: DUS,
       sheets: [sheet(D, "MORNING", 1, "MS", 100_000, 100_500, 1000)],
-      placement: placeSheets(NOZZLES, [sheet(D, "MORNING", 1, "MS", 100_000, 100_500, 1000)]),
+      placement: place(NOZZLES, [sheet(D, "MORNING", 1, "MS", 100_000, 100_500, 1000)]),
       qr: [],
       phonepe: new Map(),
       reportDays: new Set(),

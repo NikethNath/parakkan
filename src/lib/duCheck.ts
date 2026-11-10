@@ -47,8 +47,14 @@ export interface DuSheet {
   nozzles: { open: number; close: number }[];
 }
 
-/** For each sheet, which DU each of its nozzles was — null when unknown. */
-export type Placement = Map<number, (string | null)[]>;
+/** A sheet nozzle placed on a bound nozzle. */
+export interface Placed {
+  du: string;
+  nozzleId: number;
+}
+
+/** For each sheet, where each of its nozzles was — null when unknown. */
+export type Placement = Map<number, (Placed | null)[]>;
 
 const readings = (n: { open: number; close: number }) => [n.open, n.close].filter((v) => v > 0);
 
@@ -65,6 +71,10 @@ function distance(at: number, vals: number[]): number {
  * the day it was bound, and backward for the days before. Each shift, sheet
  * nozzles go to the bound nozzle they sit nearest, closest pair first, within
  * the same window the Meter tab trusts — a misread digit, not another pump.
+ *
+ * One nozzle can carry several sheets in a shift — a relief who took over, or a
+ * sheet filed under the wrong shift — so matching repeats from where the last
+ * sheet left the nozzle until nothing more fits.
  */
 export function placeSheets(nozzles: DuNozzle[], sheets: DuSheet[]): Placement {
   const placement: Placement = new Map(sheets.map((s) => [s.id, s.nozzles.map(() => null)]));
@@ -84,32 +94,36 @@ export function placeSheets(nozzles: DuNozzle[], sheets: DuSheet[]): Placement {
         const active = bound.filter((n) => (forward ? date >= n.readOn : date < n.readOn));
         if (active.length === 0) continue;
 
-        const open: { sheet: DuSheet; i: number; vals: number[] }[] = [];
-        for (const sheet of byKey.get(key) ?? []) {
-          if (sheet.product !== product) continue;
-          sheet.nozzles.forEach((n, i) => {
-            const vals = readings(n);
-            if (vals.length && placement.get(sheet.id)![i] === null) open.push({ sheet, i, vals });
-          });
-        }
+        for (let placedAny = true; placedAny; ) {
+          placedAny = false;
+          const open: { sheet: DuSheet; i: number; vals: number[] }[] = [];
+          for (const sheet of byKey.get(key) ?? []) {
+            if (sheet.product !== product) continue;
+            sheet.nozzles.forEach((n, i) => {
+              const vals = readings(n);
+              if (vals.length && placement.get(sheet.id)![i] === null) open.push({ sheet, i, vals });
+            });
+          }
 
-        const pairs = open
-          .flatMap((o, oi) => active.map((n) => ({ oi, n, d: distance(at.get(n.id)!, o.vals) })))
-          .filter((p) => p.d <= MAX_PAIR_DIFF)
-          .sort((a, b) => a.d - b.d);
-        const usedSlot = new Set<number>();
-        const usedNozzle = new Set<number>();
-        for (const p of pairs) {
-          if (usedSlot.has(p.oi) || usedNozzle.has(p.n.id)) continue;
-          usedSlot.add(p.oi);
-          usedNozzle.add(p.n.id);
-          const o = open[p.oi];
-          placement.get(o.sheet.id)![o.i] = p.n.du;
-          // Move on to where this shift left the nozzle — but not to a reading
-          // that leapt past the window, which is a typo rather than litres.
-          const cur = at.get(p.n.id)!;
-          const ahead = o.vals.filter((v) => Math.abs(v - cur) <= MAX_PAIR_DIFF);
-          if (ahead.length) at.set(p.n.id, forward ? Math.max(cur, ...ahead) : Math.min(cur, ...ahead));
+          const pairs = open
+            .flatMap((o, oi) => active.map((n) => ({ oi, n, d: distance(at.get(n.id)!, o.vals) })))
+            .filter((p) => p.d <= MAX_PAIR_DIFF)
+            .sort((a, b) => a.d - b.d);
+          const usedSlot = new Set<number>();
+          const usedNozzle = new Set<number>();
+          for (const p of pairs) {
+            if (usedSlot.has(p.oi) || usedNozzle.has(p.n.id)) continue;
+            usedSlot.add(p.oi);
+            usedNozzle.add(p.n.id);
+            const o = open[p.oi];
+            placement.get(o.sheet.id)![o.i] = { du: p.n.du, nozzleId: p.n.id };
+            placedAny = true;
+            // Move on to where this shift left the nozzle — but not to a reading
+            // that leapt past the window, which is a typo rather than litres.
+            const cur = at.get(p.n.id)!;
+            const ahead = o.vals.filter((v) => Math.abs(v - cur) <= MAX_PAIR_DIFF);
+            if (ahead.length) at.set(p.n.id, forward ? Math.max(cur, ...ahead) : Math.min(cur, ...ahead));
+          }
         }
       }
     }
@@ -149,6 +163,9 @@ export interface DuGroup {
   /** Another group the same day whose gap is the exact opposite — the money
    *  was most likely written on the wrong DU's sheet. */
   mirror?: string;
+  /** Different people's sheets on the same nozzle in the same shift. A relief
+   *  can do that, but usually one of them picked the wrong shift. */
+  sameShift: { du: string; shift: Shift; names: string[] }[];
 }
 
 export interface DuDay {
@@ -193,6 +210,7 @@ export function checkDuDays(input: DuCheckInput): DuDay[] {
     // A staff member's shift is one node: their GPay covers every sheet they
     // filed that shift, whichever product.
     const staff = new Map<string, DuStaff & { dus: Set<string>; unbound: boolean }>();
+    const onNozzle = new Map<string, { du: string; shift: Shift; staff: Map<number, string> }>();
     for (const s of daySheets) {
       const k = `${s.staffId}|${s.shift}`;
       const node = staff.get(k) ?? {
@@ -203,8 +221,14 @@ export function checkDuDays(input: DuCheckInput): DuDay[] {
       s.nozzles.forEach((n, i) => {
         // Only a nozzle that sold puts its staff at that DU.
         if (Math.abs(n.close - n.open) <= 0 || n.open <= 0 || n.close <= 0) return;
-        if (placed[i]) node.dus.add(placed[i]!);
-        else node.unbound = true;
+        const at = placed[i];
+        if (at) {
+          node.dus.add(at.du);
+          const k2 = `${s.shift}|${at.nozzleId}`;
+          const u = onNozzle.get(k2) ?? { du: at.du, shift: s.shift, staff: new Map<number, string>() };
+          u.staff.set(s.staffId, s.by);
+          onNozzle.set(k2, u);
+        } else node.unbound = true;
       });
       staff.set(k, node);
     }
@@ -265,6 +289,11 @@ export function checkDuDays(input: DuCheckInput): DuDay[] {
         delta,
         status,
         unbound: people.some((p) => p.unbound),
+        sameShift: [...onNozzle.values()]
+          .filter((u) => u.staff.size > 1 && members.includes(u.du))
+          .map((u) => ({ du: u.du, shift: u.shift, names: [...u.staff.values()].sort() }))
+          // Both nozzles of a DU shared by the same pair say the same thing once.
+          .filter((u, i, all) => all.findIndex((v) => v.du === u.du && v.shift === u.shift && v.names.join() === u.names.join()) === i),
       };
     });
     groups.sort((a, b) => (order.get(a.dus[0]) ?? 99) - (order.get(b.dus[0]) ?? 99));

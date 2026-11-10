@@ -43,6 +43,12 @@ function Note({ g, day }: { g: DuGroup; day: DuDay }) {
     );
   }
   if (g.mirror) lines.push(`${g.dus.join(" + ")} and ${g.mirror} are off by the same amount the opposite way — likely written on the wrong DU's sheet.`);
+  for (const u of g.sameShift)
+    lines.push(
+      `${u.names.join(" and ")} both filed ${shiftLabel[u.shift].toLowerCase()} sheets on the same ${u.du} nozzle — if one was really the ${
+        u.shift === "MORNING" ? "evening" : "morning"
+      }, correct its shift.`,
+    );
   if (g.unbound) lines.push("A nozzle on these sheets isn't bound to a DU, so some of this GPay may belong elsewhere.");
   if (lines.length === 0) return null;
   return (
