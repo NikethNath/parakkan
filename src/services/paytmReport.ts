@@ -11,7 +11,9 @@ import * as XLSX from "xlsx";
  *
  * The file itself is never kept — it holds customer VPAs, mobile numbers and
  * card last-4 digits, none of which this app has any business storing. Only the
- * two totals per day survive parsing.
+ * two totals per day survive parsing — plus, for UPI, a total per QR code
+ * (`POS_ID`): each dispensing unit has its own QR, so that is what lets a DU's
+ * GPay be checked against the staff who worked it.
  */
 
 export type PaytmChannel = "GPAY" | "POS";
@@ -24,8 +26,18 @@ export interface PaytmDayTotals {
   posCount: number;
 }
 
+/** UPI taken on one QR code (the report's POS_ID) on one day. */
+export interface PaytmQrTotal {
+  date: string;
+  posId: string; // upper-case
+  amount: number;
+  count: number;
+}
+
 export interface ParsedPaytmReport {
   days: PaytmDayTotals[];
+  /** UPI per QR per day. A payment with no POS_ID is in `days` but not here. */
+  qr: PaytmQrTotal[];
   countedRows: number;
   /** Rows that were not a successful collection: failed, aborted, refunds. */
   skippedRows: number;
@@ -61,6 +73,7 @@ export function classifyPaytmMode(mode: string): PaytmChannel | null {
 
 interface Acc {
   byDay: Map<string, PaytmDayTotals>;
+  byQr: Map<string, PaytmQrTotal>;
   seenIds: Set<string>;
   countedRows: number;
   skippedRows: number;
@@ -71,6 +84,7 @@ interface Acc {
 
 const emptyAcc = (): Acc => ({
   byDay: new Map(),
+  byQr: new Map(),
   seenIds: new Set(),
   countedRows: 0,
   skippedRows: 0,
@@ -97,6 +111,7 @@ function absorb(text: string, acc: Acc): void {
   const iMode = col("Payment_Mode");
   const iType = col("Transaction_Type");
   const iId = col("Transaction_ID");
+  const iPos = col("POS_ID");
   if (iDate < 0 || iStatus < 0 || iAmount < 0 || iMode < 0) return;
 
   for (let i = 1; i < aoa.length; i++) {
@@ -145,6 +160,14 @@ function absorb(text: string, acc: Acc): void {
     if (channel === "GPAY") {
       day.gpay += amount;
       day.gpayCount++;
+      const posId = iPos >= 0 ? cell(row[iPos]).toUpperCase() : "";
+      if (posId) {
+        const k = `${date}|${posId}`;
+        const q = acc.byQr.get(k) ?? { date, posId, amount: 0, count: 0 };
+        q.amount += amount;
+        q.count++;
+        acc.byQr.set(k, q);
+      }
     } else {
       day.pos += amount;
       day.posCount++;
@@ -158,6 +181,9 @@ const finish = (acc: Acc): ParsedPaytmReport => ({
   days: [...acc.byDay.values()]
     .map((d) => ({ ...d, gpay: round2(d.gpay), pos: round2(d.pos) }))
     .sort((a, b) => a.date.localeCompare(b.date)),
+  qr: [...acc.byQr.values()]
+    .map((q) => ({ ...q, amount: round2(q.amount) }))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.posId.localeCompare(b.posId)),
   countedRows: acc.countedRows,
   skippedRows: acc.skippedRows,
   duplicateRows: acc.duplicateRows,

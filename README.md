@@ -63,6 +63,13 @@ against the oil company's official records and the bank statement, and audited.
   statement supplies PhonePe money from the old QR, which Paytm never sees. A
   day's GPay is the two added together, and both are matched against the daily
   sheets with gaps flagged.
+- **GPay by DU** — each dispenser has its own Paytm QR (the report's `POS_ID`:
+  DU1, DU2, DU3), so the import also keeps UPI per QR per day. Each DU's two
+  nozzles are bound once by a meter reading and followed through the sheets
+  from there, which says who worked which DU; the morning and evening staff's
+  GPay together is then checked against that DU's QR for the day. A gap flags
+  the pair, and an equal-and-opposite gap on another DU is called out as money
+  written on the wrong DU's sheet. Card swipes stay a whole-day check.
 - **Midday handover check** — a morning closing and the evening opening after
   it are one reading of one dial, so they must agree. When they don't, the Meter
   tab flags it, says how many litres the day is out by, and names the sheet that

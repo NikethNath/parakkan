@@ -168,6 +168,19 @@ export async function POST(req: Request) {
           reportDays.map((d) => ({ businessDate: d.date, gpay: d.gpay, pos: d.pos })),
           user.uid,
         );
+        // UPI per QR code, for the per-DU check. Replaced for exactly the days
+        // the report covers, like the day figures above.
+        await tx.paytmQrDay.deleteMany({
+          where: { businessDate: { in: reportDays.map((d) => toDate(d.date)) } },
+        });
+        await tx.paytmQrDay.createMany({
+          data: report!.qr.map((q) => ({
+            businessDate: toDate(q.date),
+            posId: q.posId,
+            amount: q.amount,
+            count: q.count,
+          })),
+        });
       }
       return statements.length > 0 ? saveStatementTxns(tx, statements, user.uid) : [];
     },
@@ -205,8 +218,20 @@ export async function POST(req: Request) {
     };
   });
 
+  // UPI per QR across the import, and which QR codes aren't set up as a DU —
+  // so a new or renamed QR is noticed rather than silently left out.
+  const qrTotals = new Map<string, number>();
+  for (const q of report?.qr ?? []) qrTotals.set(q.posId, (qrTotals.get(q.posId) ?? 0) + q.amount);
+  const known = new Set(
+    (await prisma.dispenser.findMany({ select: { posId: true } })).map((d) => d.posId),
+  );
+  const qr = [...qrTotals]
+    .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
+    .map(([posId, amount]) => ({ posId, amount: Math.round(amount * 100) / 100, isDu: known.has(posId) }));
+
   return NextResponse.json({
     ok: true,
+    qr,
     days,
     fileCount: files.length,
     report: report

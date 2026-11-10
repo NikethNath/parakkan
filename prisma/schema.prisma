@@ -465,3 +465,40 @@ model Document {
 
   @@index([folderId])
 }
+
+// UPI taken on one Paytm QR code on one collection day — the Paytm report's
+// POS_ID column, summed. Each dispensing unit has its own QR (DU1, DU2, DU3),
+// so this is what lets a DU's GPay be checked against the staff who worked it.
+// Like the day figures in BankTxn, a day is stored by replacement on every
+// import, and nothing about the customers is kept.
+model PaytmQrDay {
+  id           Int      @id @default(autoincrement())
+  businessDate DateTime @db.Date
+  posId        String
+  amount       Decimal  @db.Decimal(14, 2)
+  count        Int
+
+  @@unique([businessDate, posId])
+}
+
+// A dispensing unit and the Paytm QR code that stands at it.
+model Dispenser {
+  id      Int               @id @default(autoincrement())
+  name    String            @unique // "DU1"
+  // The QR's POS_ID in the Paytm report, stored upper-case.
+  posId   String            @unique
+  nozzles DispenserNozzle[]
+}
+
+// One of a DU's nozzles, identified by a meter reading it showed on a given
+// day. Sheets don't say which DU they were for, but a totalizer only counts up
+// and each one sits far from the others, so the nozzle is followed from that
+// reading through the sheets day by day — see src/lib/duCheck.ts.
+model DispenserNozzle {
+  id          Int       @id @default(autoincrement())
+  dispenser   Dispenser @relation(fields: [dispenserId], references: [id], onDelete: Cascade)
+  dispenserId Int
+  product     Product
+  reading     Decimal   @db.Decimal(12, 2)
+  readOn      DateTime  @db.Date
+}

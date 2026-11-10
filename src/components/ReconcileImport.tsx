@@ -23,6 +23,8 @@ interface StatementFileRow {
 }
 interface Result {
   days: DayRow[];
+  /** UPI per Paytm QR code (POS_ID) across the import. */
+  qr: { posId: string; amount: number; isDu: boolean }[];
   fileCount: number;
   report: {
     fileCount: number;
@@ -151,6 +153,26 @@ export default function ReconcileImport() {
               {rep.duplicateRows > 0 &&
                 `, ${rep.duplicateRows} repeated across parts counted once`}
               .
+            </p>
+          )}
+          {res.qr.length > 0 && (
+            <p className="text-xs text-muted" data-testid="qr-split">
+              UPI by QR:{" "}
+              {res.qr.map((q, i) => (
+                <span key={q.posId}>
+                  {i > 0 && " · "}
+                  <strong className="text-foreground">{q.posId}</strong> {inr(q.amount)}
+                </span>
+              ))}
+            </p>
+          )}
+          {res.qr.some((q) => !q.isDu) && (
+            <p className="text-sm text-amber-700 dark:text-amber-300">
+              {plural(res.qr.filter((q) => !q.isDu).length, "QR code")}{" "}
+              {res.qr.filter((q) => !q.isDu).map((q) => q.posId).join(", ")}{" "}
+              {res.qr.filter((q) => !q.isDu).length === 1 ? "isn't" : "aren't"} set up as a DU
+              yet — add {res.qr.filter((q) => !q.isDu).length === 1 ? "it" : "them"} under
+              &quot;GPay by DU&quot; below to check {res.qr.filter((q) => !q.isDu).length === 1 ? "its" : "their"} staff.
             </p>
           )}
           {stmt && (

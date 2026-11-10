@@ -150,3 +150,44 @@ describe("parsePaytmReports — split weekly/monthly exports", () => {
     expect(merged.days).toEqual(single.days);
   });
 });
+
+describe("UPI per QR code", () => {
+  const H = ["Transaction_ID", "Transaction_Date", "Status", "Amount", "Payment_Mode", "POS_ID"].join(",");
+  const r = (id: string, date: string, amount: string, mode: string, pos: string, status = "SUCCESS") =>
+    [`'${id}'`, `'${date}'`, `'${status}'`, amount, `'${mode}'`, `'${pos}'`].join(",");
+  const csv = [
+    H,
+    r("a1", "2026-08-28 07:00:00", "300.00", "UPI", "DU1"),
+    r("a2", "2026-08-28 19:00:00", "200.00", "UPI_LITE", "du1"),
+    r("a3", "2026-08-28 09:00:00", "500.00", "UPI", "DU2"),
+    // A card swipe on a terminal — POS money, never a QR's.
+    r("a4", "2026-08-28 10:00:00", "1000.00", "DEBIT_CARD", "12345678"),
+    r("a5", "2026-08-28 11:00:00", "90.00", "UPI", "DU2", "FAILURE"),
+    r("a6", "2026-08-29 08:00:00", "50.00", "UPI", "DU1"),
+    // No POS_ID: still GPay for the day, just not tied to a QR.
+    r("a7", "2026-08-29 08:30:00", "70.00", "UPI", ""),
+  ].join("\n");
+
+  it("sums successful UPI per QR per day, case-insensitively", () => {
+    const p = parsePaytmReport(csv);
+    expect(p.qr).toEqual([
+      { date: "2026-08-28", posId: "DU1", amount: 500, count: 2 },
+      { date: "2026-08-28", posId: "DU2", amount: 500, count: 1 },
+      { date: "2026-08-29", posId: "DU1", amount: 50, count: 1 },
+    ]);
+    // The day totals are unchanged by it.
+    expect(p.days.map((d) => [d.date, d.gpay, d.pos])).toEqual([
+      ["2026-08-28", 1000, 1000],
+      ["2026-08-29", 120, 0],
+    ]);
+  });
+
+  it("counts a payment repeated across split files once per QR too", () => {
+    const p = parsePaytmReports([csv, csv]);
+    expect(p.qr.find((q) => q.posId === "DU1" && q.date === "2026-08-28")?.amount).toBe(500);
+  });
+
+  it("gives no QR totals for an export without the POS_ID column", () => {
+    expect(parsePaytmReport(sample).qr).toEqual([]);
+  });
+});
