@@ -140,7 +140,7 @@ describe("checkDuDays", () => {
     expect(days[0].groups[0]).toMatchObject({ delta: -500, status: "short" });
   });
 
-  it("spots money written on the wrong DU's sheet", () => {
+  it("hides DU gaps that cancel out when the day's total matches the report", () => {
     const days = run(
       [
         sheet(D, "MORNING", 1, "MS", 100_000, 100_500, 3500), // took 500 of DU2's
@@ -151,9 +151,57 @@ describe("checkDuDays", () => {
         { date: D, posId: "DU2", amount: 2000 },
       ],
     );
+    expect(days[0].balanced).toBe(true);
+    expect(days[0].groups.map((g) => [g.status, g.mirror])).toEqual([
+      ["ok", undefined],
+      ["ok", undefined],
+    ]);
+  });
+
+  it("still hides it with a few paise off on each DU", () => {
+    const days = run(
+      [
+        sheet(D, "MORNING", 1, "MS", 100_000, 100_500, 85_178),
+        sheet(D, "MORNING", 2, "MS", 200_000, 200_500, 75_171.27),
+      ],
+      [
+        { date: D, posId: "DU1", amount: 85_177.77 },
+        { date: D, posId: "DU2", amount: 75_170.27 },
+      ],
+    );
+    expect(days[0].balanced).toBe(true);
+  });
+
+  it("clears 'not on any DU' when the day balances anyway", () => {
+    const days = run(
+      [
+        sheet(D, "MORNING", 1, "MS", 900_000, 900_500, 700),
+        sheet(D, "EVENING", 2, "MS", 100_000, 100_500, 1000),
+      ],
+      [{ date: D, posId: "DU1", amount: 1700 }],
+    );
+    expect(days[0]).toMatchObject({ balanced: true, unplaced: [] });
+    expect(days[0].groups[0].status).toBe("ok");
+  });
+
+  it("spots money written on the wrong DU's sheet when the day is off too", () => {
+    const days = run(
+      [
+        sheet(D, "MORNING", 1, "MS", 100_000, 100_500, 3500), // took 500 of DU2's
+        sheet(D, "MORNING", 2, "MS", 200_000, 200_500, 1500),
+        sheet(D, "MORNING", 3, "MS", 300_000, 300_500, 900), // DU3 is ₹100 short
+      ],
+      [
+        { date: D, posId: "DU1", amount: 3000 },
+        { date: D, posId: "DU2", amount: 2000 },
+        { date: D, posId: "DU3", amount: 1000 },
+      ],
+    );
+    expect(days[0].balanced).toBe(false);
     const [du1, du2] = days[0].groups;
     expect(du1).toMatchObject({ dus: ["DU1"], delta: 500, status: "over", mirror: "DU2" });
     expect(du2).toMatchObject({ dus: ["DU2"], delta: -500, status: "short", mirror: "DU1" });
+    expect(days[0].groups[2]).toMatchObject({ dus: ["DU3"], delta: -100, status: "short" });
   });
 
   it("checks DUs together when one person worked both", () => {
@@ -210,7 +258,7 @@ describe("checkDuDays", () => {
 
   it("lists UPI on a QR that isn't a DU, and counts it as untied money", () => {
     const days = run(
-      [sheet(D, "MORNING", 1, "MS", 100_000, 100_500, 3200)],
+      [sheet(D, "MORNING", 1, "MS", 100_000, 100_500, 3100)],
       [
         { date: D, posId: "DU1", amount: 3000 },
         { date: D, posId: "OFFICE", amount: 200 },
@@ -218,6 +266,13 @@ describe("checkDuDays", () => {
     );
     expect(days[0].otherQr).toEqual([{ posId: "OFFICE", amount: 200 }]);
     expect(days[0].groups[0].status).toBe("untied");
+    // Had the staff written the full 3,200 the report shows, the day balances.
+    expect(
+      run([sheet(D, "MORNING", 1, "MS", 100_000, 100_500, 3200)], [
+        { date: D, posId: "DU1", amount: 3000 },
+        { date: D, posId: "OFFICE", amount: 200 },
+      ])[0].balanced,
+    ).toBe(true);
   });
 
   it("shows a DU that took money no sheet was placed on", () => {

@@ -178,6 +178,9 @@ export interface DuDay {
   /** Staff with GPay but no nozzle placed on any DU. */
   unplaced: DuStaff[];
   hasReport: boolean;
+  /** The day's GPay on all the staff sheets equals all the UPI in the Paytm
+   *  report. The money is right, so how it split across DUs isn't flagged. */
+  balanced: boolean;
 }
 
 export interface DuCheckInput {
@@ -312,6 +315,30 @@ export function checkDuDays(input: DuCheckInput): DuDay[] {
       .filter((n) => n.dus.size === 0 && n.gpay > 0)
       .map(({ staffId, shift, by, gpay }) => ({ staffId, shift, by, gpay: r2(gpay) }));
 
-    return { date, groups, otherQr, phonepe: phonepe.get(date) ?? 0, unplaced, hasReport };
+    // When the whole day's GPay matches the report, nothing went missing — a
+    // DU-by-DU gap that cancels out isn't worth anyone's attention, so it's
+    // cleared rather than shown. Each DU can be a few paise off on its own, so
+    // the allowance grows with the number of rows.
+    const dayStaff = [...staff.values()].reduce((n, s) => n + s.gpay, 0);
+    const dayPaytm = qr.filter((q) => q.date === date).reduce((n, q) => n + q.amount, 0);
+    const balanced =
+      hasReport && Math.abs(dayStaff - dayPaytm) <= DU_TOLERANCE * Math.max(1, groups.length);
+    if (balanced) {
+      for (const g of groups) {
+        g.status = "ok";
+        g.mirror = undefined;
+        g.unbound = false;
+      }
+    }
+
+    return {
+      date,
+      groups,
+      otherQr,
+      phonepe: phonepe.get(date) ?? 0,
+      unplaced: balanced ? [] : unplaced,
+      hasReport,
+      balanced,
+    };
   });
 }

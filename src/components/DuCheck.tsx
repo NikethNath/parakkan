@@ -116,7 +116,9 @@ export default function DuCheck({ days }: { days: DuDay[] }) {
       <p className="mt-2 text-xs text-faint">
         Δ = staff − Paytm QR, for the morning and evening together. Staff are placed on a DU by
         their sheet&apos;s nozzle readings; someone who worked two DUs joins them into one row.
-        Card swipes aren&apos;t split by DU — they&apos;re checked for the whole day above.
+        When a day&apos;s total GPay matches the Paytm report, its DUs aren&apos;t flagged even if
+        they differ from each other. Card swipes aren&apos;t split by DU — they&apos;re checked for
+        the whole day above.
       </p>
     </div>
   );
